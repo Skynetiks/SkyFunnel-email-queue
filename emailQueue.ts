@@ -16,6 +16,12 @@ const sendEmail = async (email: { senderId: string; leadId: string; subject: str
 	
 		const lead = leadResult.rows[0];
 		if (!lead) throw new Error("Lead not found");
+
+		const suppressedResults = await query('SELECT * FROM "BlacklistedEmail" WHERE email = $1', [lead.email]);
+
+		if (suppressedResults.rows.length > 0) {
+		  throw new Error("Email suppressed");
+		}
 	
 		const emailSent = await sendEmailSES(
 		  `${campaignOrg.name.toLowerCase().replace(" ", "-").replace(".", "")}-${campaignOrg.id}@skyfunnel.ai`,
