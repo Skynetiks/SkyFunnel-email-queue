@@ -6,16 +6,19 @@ import { CampaignOrg } from "./types";
 
 const sendEmail = async (email: { senderId: string; leadId: string; subject: string; bodyHTML: string; replyToEmail: string; id: string; emailCampaignId: string; }, campaignOrg: { name: string; id: any; }) => {
 	try {
-		const userResult = await query('SELECT * FROM "User" WHERE id = $1;', [email.senderId]);
+		const leadResultsPromise = query('SELECT * FROM "Lead" WHERE id = $1 AND "isSubscribedToEmail" = true', [email.leadId]);
+		const userResultsPromise = query('SELECT * FROM "User" WHERE id = $1;', [email.senderId]);
+
+		const [leadResult, userResult] = await Promise.all([leadResultsPromise, userResultsPromise]);
+
 		const user = userResult.rows[0];
 		if (!user) throw new Error("User not found");
 	
-		const leadResult = await query('SELECT * FROM "Lead" WHERE id = $1', [email.leadId]);
 		const lead = leadResult.rows[0];
 		if (!lead) throw new Error("Lead not found");
 	
 		const emailSent = await sendEmailSES(
-		  `${campaignOrg.name.toLowerCase().replace(" ", "-").replace(".", "")}-${campaignOrg.id}@theprospect.ai`,
+		  `${campaignOrg.name.toLowerCase().replace(" ", "-").replace(".", "")}-${campaignOrg.id}@skyfunnel.ai`,
 		  campaignOrg.name,
 		  lead.email,
 		  email.subject,
@@ -24,11 +27,13 @@ const sendEmail = async (email: { senderId: string; leadId: string; subject: str
 		);
 	
 		if (emailSent.success) {
-		  await query('UPDATE "Email" SET status = $1 WHERE id = $2', ['SENT', email.id]);
+		  const updateEmailResult = query('UPDATE "Email" SET status = $1 WHERE id = $2', ['SENT', email.id]);
 	
-		  await query('UPDATE "EmailCampaign" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1', [email.emailCampaignId]);
+		  const updateCampaignResult = query('UPDATE "EmailCampaign" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1', [email.emailCampaignId]);
 	
-		  await query('UPDATE "Organization" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1', [campaignOrg.id]);
+		  const updateOrganizationResult = query('UPDATE "Organization" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1', [campaignOrg.id]);
+
+			await Promise.all([updateEmailResult, updateCampaignResult, updateOrganizationResult]);
 		} else {
 		  throw new Error("Email not sent by AWS");
 		}
