@@ -4,7 +4,17 @@ import { getRedisConnection } from "./redis";
 import { query } from "./db";
 import { CampaignOrg } from "./types";
 
-const sendEmail = async (email: { senderId: string; leadId: string; subject: string; bodyHTML: string; replyToEmail: string; id: string; emailCampaignId: string; }, campaignOrg: { name: string; id: any; }) => {
+type Email = {
+	senderId: string;
+	leadId: string;
+	subject: string;
+	bodyHTML: string;
+	replyToEmail: string;
+	id: string;
+	emailCampaignId: string;
+};
+
+const sendEmail = async (email: Email, campaignOrg: { name: string; id: any; }) => {
 	try {
 		const leadResultsPromise = query('SELECT * FROM "Lead" WHERE id = $1 AND "isSubscribedToEmail" = true', [email.leadId]);
 		const userResultsPromise = query('SELECT * FROM "User" WHERE id = $1;', [email.senderId]);
@@ -89,7 +99,7 @@ export async function initializeWorkerForCampaign(campaignId: string) {
 	}
 }
 
-export async function addEmailToQueue(email: { senderId: string; leadId: string; subject: string; bodyHTML: string; replyToEmail: string; id: string; emailCampaignId: string; }, campaignOrg: CampaignOrg, interval: number, index: number) {
+export async function addEmailToQueue(email: Email, campaignOrg: CampaignOrg, interval: number, index: number) {
 	const connection = await getRedisConnection();
 	if (!connection) {
 		console.error("Redis connection failed");
@@ -115,4 +125,39 @@ export async function addEmailToQueue(email: { senderId: string; leadId: string;
 			},
 		},
 	);
+}
+
+export async function addBulkEmailsToQueue(emails: Email[], campaignOrg: CampaignOrg, interval: number) {
+	const connection = await getRedisConnection();
+	if (!connection) {
+		console.error("Redis connection failed");
+		return;
+	}
+
+	const queueName = `emailQueue-${emails[0].emailCampaignId}`;
+	const emailQueue = new Queue(queueName, { connection });
+
+	const jobs = emails.map((email, index) => {
+		const delay = index * interval * 1000;
+
+		return {
+			name: email.id,
+			data: { email, campaignOrg },
+			opts: {
+				removeOnComplete: true,
+				removeOnFail: true,
+				attempts: 3, // Total attempts including the first try and two retries
+				delay: delay,
+				backoff: {
+					type: "exponential", // Exponential backoff strategy
+					delay: 1000, // Initial delay of 1 second
+				},
+			},
+		};
+	});
+
+	// console.log(jobs);
+
+	// TODO: uncomment before push
+	await emailQueue.addBulk(jobs);
 }
