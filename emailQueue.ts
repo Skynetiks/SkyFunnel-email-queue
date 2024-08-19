@@ -30,7 +30,8 @@ const sendEmail = async (email: Email, campaignOrg: { name: string; id: any; }) 
 		const suppressedResults = await query('SELECT * FROM "BlacklistedEmail" WHERE email = $1', [lead.email]);
 
 		if (suppressedResults.rows.length > 0) {
-		  throw new Error("Email suppressed");
+			await query('UPDATE "Email" SET status = $1 WHERE id = $2', ['SUPPRESS', email.id]);
+			console.log("Suppressed email " + email.id)
 		}
 	
 		const emailSent = await sendEmailSES(
