@@ -1,4 +1,7 @@
 import { Redis } from "ioredis";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 let connection: Redis | null = null;
 export async function getRedisConnection() {
@@ -7,8 +10,9 @@ export async function getRedisConnection() {
 			maxRetriesPerRequest: null,
 			lazyConnect: true,
 		});
-		connection.on("error", function (err) {
+		connection.on("error", function(err) {
 			connection = null;
+			console.error("Redis error", err);
 		});
 	}
 	return connection;

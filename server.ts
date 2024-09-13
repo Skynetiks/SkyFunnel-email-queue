@@ -4,8 +4,9 @@ import {
   addEmailToQueue,
   addBulkEmailsToQueue,
 } from "./emailQueue";
-import { isCampaignOrg, isEmail } from "./types";
+import { isCampaignOrg, isEmail, isValidEmail } from "./types";
 import dotenv from "dotenv";
+import { addEmailsToQueue } from "./admin-queue";
 
 dotenv.config(); // Load environment variables from .env file
 
@@ -146,6 +147,44 @@ app.post("/add-emails", async (req, res) => {
 
   try {
     await addBulkEmailsToQueue(emails, campaignOrg, interval);
+    res.status(200).json({
+      success: true,
+      message: "Emails added to queue",
+    });
+  } catch (error: any) {
+    console.error(`Failed to add emails to queue: ${error.message}`);
+    res.status(500).json({
+      success: false,
+      message: "Failed to add emails to queue",
+    });
+  }
+});
+
+app.post("/add-admin-emails", async (req, res) => {
+  const authToken = req.headers['authorization'];
+
+  if (!authToken) {
+  	res.status(401).send('Authorization token is required');
+  	return;
+  }
+
+  if (authToken !== process.env.AUTH_TOKEN) {
+  	res.status(403).send('Invalid authorization token');
+  	return;
+  }
+
+  const { emails } = req.body;
+
+	if (!Array.isArray(emails) || emails.some((email) => !isValidEmail(email))) {
+		return res.status(400).json({
+			success: false,
+			message: "Invalid email list",
+		});
+	}
+
+  try {
+    await addEmailsToQueue(emails);
+
     res.status(200).json({
       success: true,
       message: "Emails added to queue",

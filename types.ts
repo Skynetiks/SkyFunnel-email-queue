@@ -32,3 +32,17 @@ export const isCampaignOrg = (campaignOrg: any): campaignOrg is CampaignOrg => {
     typeof campaignOrg.name === 'string'
   );
 };
+
+export type EmailData = {
+	to: string;
+	subject: string;
+	body: string;
+};
+
+export const isValidEmail = (email: any): email is EmailData => { 
+	return (
+		typeof email.to === 'string' &&
+		typeof email.subject === 'string' &&
+		typeof email.body === 'string'
+	);
+}
