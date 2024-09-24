@@ -6,6 +6,8 @@ import { CampaignOrg } from "./types";
 
 type Email = {
 	senderId: string;
+	senderName: string;
+	senderEmail: string;
 	leadId: string;
 	subject: string;
 	bodyHTML: string;
@@ -35,8 +37,8 @@ const sendEmail = async (email: Email, campaignOrg: { name: string; id: any; }) 
 		}
 	
 		const emailSent = await sendEmailSES(
-		  `${campaignOrg.name.toLowerCase().replace(" ", "-").replace(".", "")}-${campaignOrg.id}@skyfunnel.ai`,
-		  campaignOrg.name,
+		  email.senderEmail,
+		  email.senderName,
 		  lead.email,
 		  email.subject,
 		  email.bodyHTML,

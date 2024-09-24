@@ -24,7 +24,7 @@ const sesClient: SESClient = new SESClient({
 	},
 } as SESClientConfig);
 
-export async function sendEmailSES(sender: string, senderName: string, recipient: string, subject: string, body: string, replyToEmail?: string) {
+export async function sendEmailSES(senderEmail: string, senderName: string, recipient: string, subject: string, body: string, replyToEmail?: string) {
 	const sendEmailCommand = new SendEmailCommand({
 		Destination: {
 			/* required */
@@ -55,10 +55,10 @@ export async function sendEmailSES(sender: string, senderName: string, recipient
 				Data: subject,
 			},
 		},
-		Source: `${senderName} <${sender}>`,
+		Source: `${senderName} <${senderEmail}>`,
 		ReplyToAddresses: [
 			/* more items */
-			replyToEmail || sender,
+			replyToEmail || senderEmail,
 		],
 		ConfigurationSetName: "engagement-tracking"
 	});
