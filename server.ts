@@ -55,60 +55,60 @@ app.post("/initialize-worker", async (req, res) => {
 });
 
 // Add an email to the queue
-app.post("/add-email", async (req, res) => {
-  const authToken = req.headers["authorization"];
+// app.post("/add-email", async (req, res) => {
+//   const authToken = req.headers["authorization"];
 
-  if (!authToken) {
-    res.status(401).send("Authorization token is required");
-    return;
-  }
+//   if (!authToken) {
+//     res.status(401).send("Authorization token is required");
+//     return;
+//   }
 
-  if (authToken !== process.env.AUTH_TOKEN) {
-    res.status(403).send("Invalid authorization token");
-    return;
-  }
+//   if (authToken !== process.env.AUTH_TOKEN) {
+//     res.status(403).send("Invalid authorization token");
+//     return;
+//   }
 
-  const { email, campaignOrg, interval, index } = req.body;
+//   const { email, campaignOrg, interval, index } = req.body;
 
-  if (!isEmail(email)) {
-    return res.status(400).json({
-      success: false,
-      message: "Invalid email",
-    });
-  }
-  if (!isCampaignOrg(campaignOrg)) {
-    return res.status(400).json({
-      success: false,
-      message: "Invalid campaignOrg",
-    });
-  }
-  if (!interval) {
-    return res.status(400).json({
-      success: false,
-      message: "Invalid interval",
-    });
-  }
-  if (!index) {
-    return res.status(400).json({
-      success: false,
-      message: "Invalid index",
-    });
-  }
+//   if (!isEmail(email)) {
+//     return res.status(400).json({
+//       success: false,
+//       message: "Invalid email",
+//     });
+//   }
+//   if (!isCampaignOrg(campaignOrg)) {
+//     return res.status(400).json({
+//       success: false,
+//       message: "Invalid campaignOrg",
+//     });
+//   }
+//   if (!interval) {
+//     return res.status(400).json({
+//       success: false,
+//       message: "Invalid interval",
+//     });
+//   }
+//   if (!index) {
+//     return res.status(400).json({
+//       success: false,
+//       message: "Invalid index",
+//     });
+//   }
 
-  try {
-    await addEmailToQueue(email, campaignOrg, interval, index);
-    res.status(200).json({
-      success: true,
-      message: "Email added to queue",
-    });
-  } catch (error: any) {
-    console.error(`Failed to add email to queue: ${error.message}`);
-    res.status(500).json({
-      success: false,
-      message: "Failed to add email to queue",
-    });
-  }
-});
+//   try {
+//     await addEmailToQueue(email, campaignOrg, interval, index);
+//     res.status(200).json({
+//       success: true,
+//       message: "Email added to queue",
+//     });
+//   } catch (error: any) {
+//     console.error(`Failed to add email to queue: ${error.message}`);
+//     res.status(500).json({
+//       success: false,
+//       message: "Failed to add email to queue",
+//     });
+//   }
+// });
 
 // Add emails to the queue
 app.post("/add-emails", async (req, res) => {
