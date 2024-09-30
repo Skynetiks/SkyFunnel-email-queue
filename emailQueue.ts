@@ -34,6 +34,7 @@ const sendEmail = async (email: Email, campaignOrg: { name: string; id: any; }) 
 		if (suppressedResults.rows.length > 0) {
 			await query('UPDATE "Email" SET status = $1 WHERE id = $2', ['SUPPRESS', email.id]);
 			console.log("Suppressed email " + email.id)
+			return;
 		}
 	
 		const emailSent = await sendEmailSES(
