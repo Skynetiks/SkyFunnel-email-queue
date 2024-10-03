@@ -2,14 +2,17 @@
   "dependencies": {
     "@aws-sdk/client-ses": "^3.592.0",
     "@types/pg": "^8.11.6",
+    "body-parser": "^1.20.3",
     "bullmq": "^5.8.0",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "ioredis": "^5.4.1",
+    "morgan": "^1.10.0",
     "pg": "^8.12.0"
   },
   "scripts": {
-    "start": "concurrently \"npx ts-node server.ts\" \"npx ts-node admin-worker.ts\""
+    "start": "concurrently \"npx ts-node server.ts\" \"npx ts-node admin-worker.ts\"",
+    "test-start": "set DEBUG=express:* & npx ts-node server.ts"
   },
   "name": "theprospect-email-queue",
   "version": "1.0.0",
@@ -19,7 +22,9 @@
   "license": "ISC",
   "description": "",
   "devDependencies": {
+    "@types/body-parser": "^1.19.5",
     "@types/express": "^4.17.21",
+    "@types/morgan": "^1.9.9",
     "@types/node": "^20.14.2",
     "concurrently": "^9.0.1",
     "typescript": "^5.4.5"

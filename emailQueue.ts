@@ -5,14 +5,17 @@ import { query } from "./db";
 import { CampaignOrg } from "./types";
 
 type Email = {
-	senderId: string;
-	senderName: string;
-	senderEmail: string;
-	leadId: string;
-	subject: string;
-	bodyHTML: string;
-	replyToEmail: string;
+	leadFirstName: string;
+	leadLastName: string;
+	leadEmail: string;
+	leadCompanyName: string;
 	id: string;
+	leadId: string;
+	senderId: string;
+	isSentMessage: boolean;
+	isRead: boolean;
+	status: "QUEUED";
+	timestamp: Date;
 	emailCampaignId: string;
 };
 
@@ -20,47 +23,73 @@ const sendEmail = async (email: Email, campaignOrg: { name: string; id: any; }) 
 	try {
 		const leadResultsPromise = query('SELECT * FROM "Lead" WHERE id = $1 AND "isSubscribedToEmail" = true', [email.leadId]);
 		const userResultsPromise = query('SELECT * FROM "User" WHERE id = $1;', [email.senderId]);
+		const campaignPromise = query('SELECT ec.*, ect.* FROM "EmailCampaign" ec JOIN "EmailCampaignTemplate" ect ON ec."emailCampaignTemplateId" = ect.id WHERE ec.id = $1;', [email.emailCampaignId]);
 
-		const [leadResult, userResult] = await Promise.all([leadResultsPromise, userResultsPromise]);
+		const [leadResult, userResult, campaignResult] = await Promise.all([leadResultsPromise, userResultsPromise, campaignPromise]);
 
 		const user = userResult.rows[0];
 		if (!user) throw new Error("User not found");
-	
+
 		const lead = leadResult.rows[0];
 		if (!lead) throw new Error("Lead not found");
 
+		const campaign = campaignResult.rows[0];
+		if (!campaign) throw new Error("Campaign not found");
+
 		const suppressedResults = await query('SELECT * FROM "BlacklistedEmail" WHERE email = $1', [lead.email]);
+
+		const emailBodyHTML = campaign.bodyHTML
+			.replaceAll("[[firstname]]", email.leadFirstName)
+			.replaceAll("[[lastname]]", email.leadLastName)
+			.replaceAll("[[email]]", email.leadEmail)
+			.replaceAll("[[companyname]]", email.leadCompanyName);
+
+		const footer = `
+        <div style="font-size:16px;padding:16px 24px 16px 24px; color: #737373; background-color: #F5F5F5">
+            <p style="text-align:center; font-size:12px">
+                Copyright (C) ${new Date().getFullYear()} ${campaignOrg.name}. All rights reserved.
+            </p>
+            <p style="text-align:center; font-size:12px">
+                Do not want to receive these mails? Click
+                <a href="${process.env.MAIN_APP_BASE_URL}unsubscribe/${lead.id}" style="text-decoration: underline">here</a> to
+                unsubscribe.
+            </p>
+            <p style="text-align:center; padding: 0px 0px 16px 0px; font-size:14px;">
+                <a href="https://skyfunnel.ai/" style="text-decoration: underline">SkyFunnel.ai</a>
+            </p>
+        </div>
+        `;
 
 		if (suppressedResults.rows.length > 0) {
 			await query('UPDATE "Email" SET status = $1 WHERE id = $2', ['SUPPRESS', email.id]);
 			console.log("Suppressed email " + email.id)
 			return;
 		}
-	
+
 		const emailSent = await sendEmailSES(
-		  email.senderEmail,
-		  email.senderName,
-		  lead.email,
-		  email.subject,
-		  email.bodyHTML,
-		  email.replyToEmail,
+			campaign.senderEmail,
+			campaign.senderName,
+			lead.email,
+			campaign.subject,
+			emailBodyHTML + footer,
+			campaign.replyToEmail,
 		);
-	
+
 		if (emailSent.success) {
-		  const updateEmailResult = query('UPDATE "Email" SET status = $1, "awsMessageId" = $2 WHERE id = $3', ['SENT', emailSent.message.MessageId, email.id]);
-	
-		  const updateCampaignResult = query('UPDATE "EmailCampaign" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1', [email.emailCampaignId]);
-	
-		  const updateOrganizationResult = query('UPDATE "Organization" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1', [campaignOrg.id]);
+			const updateEmailResult = query('UPDATE "Email" SET status = $1, "awsMessageId" = $2 WHERE id = $3', ['SENT', emailSent.message.MessageId, email.id]);
+
+			const updateCampaignResult = query('UPDATE "EmailCampaign" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1', [campaign.id]);
+
+			const updateOrganizationResult = query('UPDATE "Organization" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1', [campaignOrg.id]);
 
 			await Promise.all([updateEmailResult, updateCampaignResult, updateOrganizationResult]);
 		} else {
-		  throw new Error("Email not sent by AWS");
+			throw new Error("Email not sent by AWS");
 		}
-	  } catch (error) {
+	} catch (error) {
 		await query('UPDATE "Email" SET status = $1 WHERE id = $2', ['ERROR', email.id]);
 		throw new Error("Error in sendEmail: " + error);
-	  }
+	}
 };
 
 const createWorker = async (campaignId: string) => {
@@ -159,8 +188,6 @@ export async function addBulkEmailsToQueue(emails: Email[], campaignOrg: Campaig
 			},
 		};
 	});
-
-	// console.log(jobs);
 
 	// TODO: uncomment before push
 	await emailQueue.addBulk(jobs);
