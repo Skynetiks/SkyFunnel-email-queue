@@ -17,12 +17,14 @@ export interface CampaignOrg {
 export const isEmail = (email: any): email is Email => {
   return (
     typeof email.id === 'string' &&
-    typeof email.subject === 'string' &&
-    typeof email.bodyHTML === 'string' &&
     typeof email.leadId === 'string' &&
-    typeof email.senderId === 'string' &&
     typeof email.emailCampaignId === 'string' &&
-    typeof email.replyToEmail === 'string'
+    typeof email.leadFirstName === 'string' &&
+    typeof email.leadLastName === 'string' &&
+    typeof email.leadEmail === 'string' &&
+    typeof email.leadCompanyName === 'string' &&
+    typeof email.emailCampaignId === 'string' &&
+    typeof email.senderId === 'string'
   );
 };
 
