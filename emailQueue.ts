@@ -78,7 +78,7 @@ const sendEmail = async (email: Email, campaignOrg: { name: string; id: any; }) 
 		if (emailSent.success) {
 			const updateEmailResult = query('UPDATE "Email" SET status = $1, "awsMessageId" = $2 WHERE id = $3', ['SENT', emailSent.message.MessageId, email.id]);
 
-			const updateCampaignResult = query('UPDATE "EmailCampaign" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1', [campaign.id]);
+			const updateCampaignResult = query('UPDATE "EmailCampaign" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1', [email.emailCampaignId]);
 
 			const updateOrganizationResult = query('UPDATE "Organization" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1', [campaignOrg.id]);
 
