@@ -73,7 +73,7 @@ export async function sendEmailSES(
       /* more items */
       replyToEmail || senderEmail,
     ],
-    ConfigurationSetName: process.env.CONFIGURATION_SET
+    ...(process.env.CONFIGURATION_SET ? { ConfigurationSetName: process.env.CONFIGURATION_SET } : {}),
   });
 
   try {
