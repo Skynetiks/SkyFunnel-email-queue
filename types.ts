@@ -1,3 +1,5 @@
+import { Attachment } from "./admin-sendmail";
+
 export interface Email {
     id: string;
     subject: string;
@@ -39,6 +41,7 @@ export type EmailData = {
 	to: string;
 	subject: string;
 	body: string;
+	attachments: Attachment[];
 };
 
 export const isValidEmail = (email: any): email is EmailData => { 
