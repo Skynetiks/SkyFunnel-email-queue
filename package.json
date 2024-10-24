@@ -11,7 +11,7 @@
     "pg": "^8.12.0"
   },
   "scripts": {
-    "start": "concurrently \"npx ts-node server.ts\" \"npx ts-node admin-worker.ts\"",
+    "start": "concurrently -- \"npx ts-node server.ts\" \"npx ts-node admin-worker.ts\"",
     "test-start": "set DEBUG=express:* & npx ts-node server.ts"
   },
   "name": "theprospect-email-queue",
