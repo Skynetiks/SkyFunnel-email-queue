@@ -1,8 +1,8 @@
 import { Queue, Worker } from "bullmq";
-import { sendEmailSES } from "./aws";
 import { getRedisConnection } from "./redis";
 import { query } from "./db";
 import { CampaignOrg } from "./types";
+import { sendEmailSMTP } from "./sendEmailSMTP";
 
 type Email = {
 	leadFirstName: string;
@@ -37,6 +37,13 @@ const sendEmail = async (email: Email, campaignOrg: { name: string; id: any; }) 
 		if (!campaign) throw new Error("Campaign not found");
 
 		const suppressedResults = await query('SELECT * FROM "BlacklistedEmail" WHERE email = $1', [lead.email]);
+		if (suppressedResults.rows.length > 0) {
+			await query('UPDATE "Email" SET status = $1 WHERE id = $2', ['SUPPRESS', email.id]);
+			console.log("Suppressed email " + email.id)
+
+			
+			return;
+		}
 
 		const emailBodyHTML = campaign.bodyHTML
 			.replaceAll("[[firstname]]", email.leadFirstName)
@@ -60,31 +67,30 @@ const sendEmail = async (email: Email, campaignOrg: { name: string; id: any; }) 
         </div>
         `;
 
-		if (suppressedResults.rows.length > 0) {
-			await query('UPDATE "Email" SET status = $1 WHERE id = $2', ['SUPPRESS', email.id]);
-			console.log("Suppressed email " + email.id)
-			return;
+		const senderIdentity = await query('SELECT password FROM "SenderIdentities" WHERE "email"= $1',[campaign.senderEmail])
+
+		if(senderIdentity.rowCount === 0){
+			throw new Error("Sender identity not found");
 		}
 
-		const emailSent = await sendEmailSES(
+		const emailSent = await sendEmailSMTP(
 			campaign.senderEmail,
 			campaign.senderName,
 			lead.email,
 			campaign.subject,
 			emailBodyHTML + footer,
+			senderIdentity.rows[0],
 			campaign.replyToEmail,
 		);
 
-		if (emailSent.success) {
-			const updateEmailResult = query('UPDATE "Email" SET status = $1, "awsMessageId" = $2 WHERE id = $3', ['SENT', emailSent.message.MessageId, email.id]);
+		if (emailSent) {
+			const updateEmailResult = query('UPDATE "Email" SET status = $1, "awsMessageId" = $2 WHERE id = $3', ['SENT', emailSent.messageId, email.id]);
 
 			const updateCampaignResult = query('UPDATE "EmailCampaign" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1', [email.emailCampaignId]);
 
 			const updateOrganizationResult = query('UPDATE "Organization" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1', [campaignOrg.id]);
 
 			await Promise.all([updateEmailResult, updateCampaignResult, updateOrganizationResult]);
-		} else {
-			throw new Error("Email not sent by AWS");
 		}
 	} catch (error) {
 		await query('UPDATE "Email" SET status = $1 WHERE id = $2', ['ERROR', email.id]);
