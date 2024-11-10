@@ -40,10 +40,13 @@ const sendEmail = async (email: Email, campaignOrg: { name: string; id: any; }) 
 		if (suppressedResults.rows.length > 0) {
 			await query('UPDATE "Email" SET status = $1 WHERE id = $2', ['SUPPRESS', email.id]);
 			console.log("Suppressed email " + email.id)
-
-			
 			return;
 		}
+
+		const headers = `
+			<div>
+			<img src="${process.env.MAIN_APP_BASE_URL}/api/email-track-open?campaignId=${campaign.id}&emailId=${email.id}" alt="" style="display: none;" width="1" height="1" />
+			</div`
 
 		const emailBodyHTML = campaign.bodyHTML
 			.replaceAll("[[firstname]]", email.leadFirstName)
@@ -78,7 +81,7 @@ const sendEmail = async (email: Email, campaignOrg: { name: string; id: any; }) 
 			campaign.senderName,
 			lead.email,
 			campaign.subject,
-			emailBodyHTML + footer,
+			headers + emailBodyHTML + footer,
 			senderIdentity.rows[0],
 			campaign.replyToEmail,
 		);
@@ -90,7 +93,11 @@ const sendEmail = async (email: Email, campaignOrg: { name: string; id: any; }) 
 
 			const updateOrganizationResult = query('UPDATE "Organization" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1', [campaignOrg.id]);
 
-			await Promise.all([updateEmailResult, updateCampaignResult, updateOrganizationResult]);
+			const addDeliveryEventResult = query(
+				'INSERT INTO "EmailEvent" ("id", "emailId", "eventType", "timestamp", "campaignId") VALUES (uuid_generate_v4(), $1, $2, $3, $4)',
+				[email.id, "DELIVERY", new Date(), campaign.id]
+			  );
+			await Promise.all([updateEmailResult, updateCampaignResult, updateOrganizationResult, addDeliveryEventResult]);
 		}
 	} catch (error) {
 		await query('UPDATE "Email" SET status = $1 WHERE id = $2', ['ERROR', email.id]);
