@@ -21,11 +21,10 @@ export const isEmail = (email: any): email is Email => {
     typeof email.id === 'string' &&
     typeof email.leadId === 'string' &&
     typeof email.emailCampaignId === 'string' &&
-    typeof email.leadFirstName === 'string' &&
-    typeof email.leadLastName === 'string' &&
+    (typeof email.leadFirstName === 'string' || email.leadFirstName === null) &&
+    (typeof email.leadLastName === 'string' || email.leadLastName === null) &&
     typeof email.leadEmail === 'string' &&
-    typeof email.leadCompanyName === 'string' &&
-    typeof email.emailCampaignId === 'string' &&
+    (typeof email.leadCompanyName === 'string' || email.leadCompanyName === null) &&
     typeof email.senderId === 'string'
   );
 };
