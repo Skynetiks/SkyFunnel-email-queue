@@ -3,6 +3,7 @@ import { getRedisConnection } from "./redis";
 import { query } from "./db";
 import { CampaignOrg } from "./types";
 import { sendEmailSMTP } from "./sendEmailSMTP";
+import { decryptToken } from "./lib/decryptToken";
 
 type Email = {
 	leadFirstName: string;
@@ -82,7 +83,7 @@ const sendEmail = async (email: Email, campaignOrg: { name: string; id: any; }) 
 			lead.email,
 			campaign.subject,
 			headers + emailBodyHTML + footer,
-			senderIdentity.rows[0],
+			decryptToken(senderIdentity.rows[0].password),
 			campaign.replyToEmail,
 		);
 
