@@ -50,10 +50,10 @@ const sendEmail = async (email: Email, campaignOrg: { name: string; id: any; }) 
 
 		const headers = `
 			<div>
-			<img src="${process.env.MAIN_APP_BASE_URL}/api/email-track-open?campaignId=${campaign.id}&emailId=${email.id}" alt="" style="display: none;" width="1" height="1" />
+			<img src="${process.env.MAIN_APP_BASE_URL}/api/email-track-open?campaignId=${email.emailCampaignId}&emailId=${email.id}" alt="" style="display: none;" width="1" height="1" />
 			</div`
 
-		const emailBodyHTML = campaign.bodyHTML
+		const emailBodyHTML = replaceUrlsInEmailHtml({id:email.emailCampaignId,bodyHTML: campaign.bodyHTML}, email.id)
 			.replaceAll("[[firstname]]", email.leadFirstName)
 			.replaceAll("[[lastname]]", email.leadLastName)
 			.replaceAll("[[email]]", email.leadEmail)
