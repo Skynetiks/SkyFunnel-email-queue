@@ -40,6 +40,7 @@ const sendEmail = async (email: Email, campaignOrg: { name: string; id: any; }) 
 		const suppressedResults = await query('SELECT * FROM "BlacklistedEmail" WHERE email = $1', [lead.email]);
 		if (suppressedResults.rows.length > 0) {
 			await query('UPDATE "Email" SET status = $1 WHERE id = $2', ['SUPPRESS', email.id]);
+			await query('UPDATE "EmailCampaign" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1', [email.emailCampaignId]);
 			await query(
 				'INSERT INTO "EmailEvent" ("id", "emailId", "eventType", "timestamp", "campaignId") VALUES (uuid_generate_v4(), $1, $2, $3, $4)',
 				[email.id, "BOUNCE", new Date().toISOString(), email.emailCampaignId]
