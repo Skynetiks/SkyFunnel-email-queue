@@ -1,9 +1,12 @@
-export function replaceUrlsInEmailHtml(campaign: {id: string, bodyHTML: string}, emailId: string) {
-  const urlPattern = /https?:\/\/[^\s"'<>]+/g;
+export function replaceUrlsInEmailHtml(campaign: { id: string; bodyHTML: string }, emailId: string) {
+  const linkPattern = /<a\s+[^>]*href="(https?:\/\/[^\s"'<>]+)"/gi;
 
-  campaign.bodyHTML = campaign.bodyHTML.replace(urlPattern, (url) => {
+  campaign.bodyHTML = campaign.bodyHTML.replace(linkPattern, (match, url) => {
     const encodedUrl = encodeURIComponent(url);
-    return `${process.env.MAIN_APP_BASE_URL}/email-track-click?campaignId=${campaign.id}&emailId=${emailId}&url=${encodedUrl}`;
+    return match.replace(
+      url,
+      `${process.env.MAIN_APP_BASE_URL}api/email-track-click?campaignId=${campaign.id}&emailId=${emailId}&url=${encodedUrl}`
+    );
   });
 
   return campaign.bodyHTML;
