@@ -96,7 +96,7 @@ const sendEmail = async (email: Email, campaignOrg: { name: string; id: any; }) 
 
 			const addDeliveryEventResult = query(
 				'INSERT INTO "EmailEvent" ("id", "emailId", "eventType", "timestamp", "campaignId") VALUES (uuid_generate_v4(), $1, $2, $3, $4)',
-				[email.id, "DELIVERY", new Date(), campaign.id]
+				[email.id, "DELIVERY", new Date().toISOString(), email.emailCampaignId]
 			  );
 			await Promise.all([updateEmailResult, updateCampaignResult, updateOrganizationResult, addDeliveryEventResult]);
 		}
