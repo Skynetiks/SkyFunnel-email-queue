@@ -1,4 +1,4 @@
-function replaceUrlsInEmailHtml(campaign: {id: string, bodyHTML: string}, emailId: string) {
+export function replaceUrlsInEmailHtml(campaign: {id: string, bodyHTML: string}, emailId: string) {
   const urlPattern = /https?:\/\/[^\s"'<>]+/g;
 
   campaign.bodyHTML = campaign.bodyHTML.replace(urlPattern, (url) => {

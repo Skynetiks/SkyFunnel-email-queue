@@ -4,6 +4,7 @@ import { query } from "./db";
 import { CampaignOrg } from "./types";
 import { sendEmailSMTP } from "./sendEmailSMTP";
 import { decryptToken } from "./lib/decryptToken";
+import { replaceUrlsInEmailHtml } from "./lib/replaceUrlInHtml"
 
 type Email = {
 	leadFirstName: string;
