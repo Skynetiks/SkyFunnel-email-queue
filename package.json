@@ -1,0 +1,50 @@
+{
+  "name": "skyfunnel-email-service",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start:server": "tsc && node dist/server/index.js",
+    "start:worker": "tsc && node dist/worker/worker.js",
+    "dev": "nodemon",
+    "lint": "eslint src",
+    "build": "npm run format && npm run lint && tsc",
+    "format": "prettier --write \"src/**\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@eslint/js": "^9.14.0",
+    "@types/compression": "^1.7.5",
+    "@types/express": "^5.0.0",
+    "@types/morgan": "^1.9.9",
+    "@types/node": "^22.9.0",
+    "@types/nodemailer": "^6.4.16",
+    "@types/pg": "^8.11.10",
+    "concurrently": "^9.1.0",
+    "eslint": "^9.14.0",
+    "globals": "^15.12.0",
+    "nodemon": "^3.1.7",
+    "prettier": "^3.3.3",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.13.0",
+    "vitest": "^2.1.4"
+  },
+  "dependencies": {
+    "@aws-sdk/client-ses": "^3.682.0",
+    "bull": "^4.16.4",
+    "bullmq": "^5.25.0",
+    "compression": "^1.7.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "helmet": "^8.0.0",
+    "ioredis": "^5.4.1",
+    "morgan": "^1.10.0",
+    "nodemailer": "^6.9.16",
+    "pg": "^8.13.1",
+    "zod": "^3.23.8"
+  }
+}
