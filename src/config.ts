@@ -4,7 +4,7 @@ export const EMAIL_QUEUE_KEY = "EMAIL_SENDING_QUEUE";
 export const PAUSE_CAMPAIGN_LIST_KEY = `${EMAIL_QUEUE_KEY}:pause-campaign-list`;
 
 export const QUEUE_CONFIG = {
-  concurrency: 1,
+  concurrency: 10,
   retries: 3,
 
   delayAfterPauseInSeconds: 60 * 30, // [30 mins] delay after any campaign is paused until it is rechecked. suggested to be higher to save resources.
@@ -49,7 +49,7 @@ export const getPriority = (priority: string): number => {
 export const ADMIN_WORKER_QUEUE_KEY = "EMAIL_ADMIN_WORKER_QUEUE";
 
 export const ADMIN_WORKER_QUEUE_CONFIG = {
-  concurrency: 1,
+  concurrency: 10,
   retries: 3,
 
   senderEmail: "noreply@skyfunnel.ai",

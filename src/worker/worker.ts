@@ -42,8 +42,8 @@ const handleJob = async (job: Job) => {
       return;
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    // await sendEmailAndUpdateStatus(email, campaignOrg);
+    // await new Promise((resolve) => setTimeout(resolve, 1000));
+    await sendEmailAndUpdateStatus(email, campaignOrg);
   } catch (error) {
     errorHandler(error, true);
   }

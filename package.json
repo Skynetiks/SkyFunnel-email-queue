@@ -7,6 +7,7 @@
   "scripts": {
     "start:server": "tsc && node dist/server/index.js",
     "start:worker": "tsc && node dist/worker/worker.js",
+    "start:admin-worker": "tsc && node dist/admin-worker/worker.js",
     "dev": "nodemon",
     "lint": "eslint src",
     "build": "npm run format && npm run lint && tsc",

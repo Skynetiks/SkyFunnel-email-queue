@@ -4,8 +4,8 @@ const EmailSchema = z.object({
   id: z.string(),
   leadId: z.string(),
   emailCampaignId: z.string(),
-  leadFirstName: z.string(),
-  leadLastName: z.string(),
+  leadFirstName: z.string().optional().nullable(),
+  leadLastName: z.string().optional().nullable(),
   leadEmail: z.string(),
   senderId: z.string(),
 
@@ -13,7 +13,7 @@ const EmailSchema = z.object({
   isRead: z.boolean(),
   status: z.string(),
   timeStamp: z.string().datetime().optional(),
-  leadCompanyName: z.string().optional(),
+  leadCompanyName: z.string().nullable(),
 });
 
 export const AddBulkRouteParamsSchema = z.object({
