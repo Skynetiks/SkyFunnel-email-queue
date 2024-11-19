@@ -5,9 +5,9 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "start:server": "tsc && node dist/server/index.js",
-    "start:worker": "tsc && node dist/worker/worker.js",
-    "start:admin-worker": "tsc && node dist/admin-worker/worker.js",
+    "start:server": "tsx src/server/index.ts",
+    "start:worker": "tsx src/worker/worker.ts",
+    "start:admin-worker": "tsx src/admin-worker/worker.ts",
     "dev": "nodemon",
     "lint": "eslint src",
     "build": "npm run format && npm run lint && tsc",
