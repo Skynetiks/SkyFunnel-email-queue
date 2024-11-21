@@ -38,7 +38,7 @@ export const getSuppressedEmail = async (email: string) => {
 };
 
 export const getSenderIdentity = async (senderEmail: string) => {
-  const senderIdentity = await query('SELECT password FROM "SenderIdentities" WHERE "email"= $1', [senderEmail]);
+  const senderIdentity = await query('SELECT "password" FROM "SenderIdentities" WHERE "email"= $1', [senderEmail]);
 
   if (senderIdentity.rows.length === 0) {
     return null;
