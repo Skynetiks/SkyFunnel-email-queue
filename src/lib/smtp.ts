@@ -1,6 +1,7 @@
 import nodemailer, { SendMailOptions } from "nodemailer";
 import { AppError } from "./errorHandler";
 import { Attachment } from "nodemailer/lib/mailer";
+import { htmlToText } from "html-to-text";
 
 interface SendEmailSMTPParams {
   senderEmail: string;
@@ -47,8 +48,10 @@ export async function sendEmailSMTP({
       from: `"${senderName}" <${senderEmail}>`,
       to: recipient,
       subject: subject,
-      text: body,
-      html: `<p>${body}</p>`,
+      text: htmlToText(body, {
+        wordwrap: 130,
+      }),
+      html: body,
       replyTo: replyToEmail || senderEmail,
       attachments: attachments || [],
     } satisfies SendMailOptions;
