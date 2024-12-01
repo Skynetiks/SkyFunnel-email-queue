@@ -29,7 +29,7 @@ export const sendEmailAndUpdateStatus = async (email: Email, campaignOrg: { name
     .replaceAll("[[email]]", email.leadEmail || "")
     .replaceAll("[[companyname]]", email.leadCompanyName || "");
 
-  const footer = getFooter(campaign.name, lead.id);
+  const footer = getFooter(campaignOrg.name, lead.id);
   const header = getHeader(email.emailCampaignId, email.id);
 
   if (suppressedResults) {
