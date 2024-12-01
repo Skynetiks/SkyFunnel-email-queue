@@ -21,7 +21,6 @@ export const handleJob = async (data: unknown) => {
       recipient: email.to,
       subject: email.subject,
       body: email.body,
-      password: process.env.ADMIN_SENDER_PASSWORD,
       replyToEmail: ADMIN_WORKER_QUEUE_CONFIG.replyToEmail,
       attachments: email.attachments,
     });

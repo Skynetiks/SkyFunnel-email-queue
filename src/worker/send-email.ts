@@ -57,7 +57,6 @@ export const sendEmailAndUpdateStatus = async (email: Email, campaignOrg: { name
     recipient: lead.email,
     subject: campaign.subject,
     replyToEmail: campaign.replyToEmail,
-    password: senderPassword,
   });
 
   if (emailSent.accepted && emailSent.messageId) {
