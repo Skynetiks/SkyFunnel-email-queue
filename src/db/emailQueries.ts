@@ -1,5 +1,4 @@
 import { query } from "../lib/db";
-import { decryptToken } from "../lib/decrypt";
 
 export const getLeadById = async (leadId: string) => {
   const response = await query('SELECT * FROM "Lead" WHERE id = $1 AND "isSubscribedToEmail" = true', [leadId]);
@@ -35,16 +34,4 @@ export const getSuppressedEmail = async (email: string) => {
   }
 
   return response.rows[0];
-};
-
-export const getSenderIdentity = async (senderEmail: string) => {
-  const senderIdentity = await query('SELECT "password" FROM "SenderIdentities" WHERE "email"= $1', [senderEmail]);
-
-  if (senderIdentity.rows.length === 0) {
-    return null;
-  }
-
-  const { password: encryptedPassword } = senderIdentity.rows[0];
-
-  return decryptToken(encryptedPassword);
 };

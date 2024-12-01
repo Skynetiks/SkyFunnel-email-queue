@@ -1,4 +1,4 @@
-import { getCampaignById, getLeadById, getSenderIdentity, getSuppressedEmail, getUserById } from "../db/emailQueries";
+import { getCampaignById, getLeadById, getSuppressedEmail, getUserById } from "../db/emailQueries";
 import { query } from "../lib/db";
 import { AppError } from "../lib/errorHandler";
 import { sendEmailSMTP } from "../lib/smtp";
@@ -43,11 +43,6 @@ export const sendEmailAndUpdateStatus = async (email: Email, campaignOrg: { name
     );
     console.log("Suppressed email " + email.id);
     return;
-  }
-
-  const senderPassword = await getSenderIdentity(campaign.senderEmail);
-  if (!senderPassword) {
-    throw new AppError("NOT_FOUND", "Sender Identity not found");
   }
 
   const emailSent = await sendEmailSMTP({
