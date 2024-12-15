@@ -1,6 +1,7 @@
+import { BulkJobOptions } from "bullmq";
 import z from "zod";
 
-const EmailSchema = z.object({
+export const EmailSchema = z.object({
   id: z.string(),
   leadId: z.string(),
   emailCampaignId: z.string(),
@@ -16,7 +17,7 @@ const EmailSchema = z.object({
   leadCompanyName: z.string().nullable(),
 });
 
-export const AddBulkRouteParamsSchema = z.object({
+export const AddBulkSkyfunnelSesRouteParamsSchema = z.object({
   emails: z.array(EmailSchema),
   campaignOrg: z.object({
     id: z.string(),
@@ -26,7 +27,7 @@ export const AddBulkRouteParamsSchema = z.object({
   priority: z.string().optional(),
 });
 
-export const AddEmailRouteParamsSchema = z.object({
+export const AddSESEmailRouteParamsSchema = z.object({
   email: EmailSchema,
   campaignOrg: z.object({
     id: z.string(),
@@ -36,5 +37,11 @@ export const AddEmailRouteParamsSchema = z.object({
 });
 
 export type Email = z.infer<typeof EmailSchema>;
-export type AddBulkRouteParamsType = z.infer<typeof AddBulkRouteParamsSchema>;
-export type AddEmailRouteParamsType = z.infer<typeof AddEmailRouteParamsSchema>;
+export type AddBulkSkyfunnelSesRouteParamType = z.infer<typeof AddBulkSkyfunnelSesRouteParamsSchema>;
+export type AddSESEmailRouteParamsType = z.infer<typeof AddSESEmailRouteParamsSchema>;
+
+export type SESJobOptions = {
+  name: string;
+  data: Omit<AddSESEmailRouteParamsType, "priority">;
+  opts?: BulkJobOptions;
+}[];

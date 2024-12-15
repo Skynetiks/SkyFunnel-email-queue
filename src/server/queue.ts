@@ -1,21 +1,37 @@
 import { Queue } from "bullmq";
-import { EMAIL_QUEUE_KEY } from "../config";
+import { SES_SKYFUNNEL_EMAIL_QUEUE_KEY, SMTP_EMAIL_QUEUE_KEY } from "../config";
 
-let emailQueue: Queue | undefined;
+class EmailQueue {
+  public smtpQueue: Queue | undefined;
+  public skyfunnelSesQueue: Queue | undefined;
 
-export const getQueue = async () => {
-  const redisUrl = process.env.REDIS_URL;
-  if (!redisUrl) {
-    throw new Error("REDIS_URL is required");
-  }
+  constructor(redisUrl: string) {
+    if (!redisUrl) {
+      throw new Error("REDIS_URL is required");
+    }
 
-  if (!emailQueue) {
-    emailQueue = new Queue(EMAIL_QUEUE_KEY, {
+    console.log("INITIALIZING QUEUES");
+
+    this.smtpQueue = new Queue(SMTP_EMAIL_QUEUE_KEY, {
+      connection: {
+        url: redisUrl,
+      },
+    });
+
+    this.skyfunnelSesQueue = new Queue(SES_SKYFUNNEL_EMAIL_QUEUE_KEY, {
       connection: {
         url: redisUrl,
       },
     });
   }
 
-  return emailQueue;
-};
+  public getSMTPInstance() {
+    return this.smtpQueue;
+  }
+
+  public getSkyfunnelInstance() {
+    return this.skyfunnelSesQueue;
+  }
+}
+
+export const emailQueueManager = new EmailQueue(process.env.REDIS_URL!);

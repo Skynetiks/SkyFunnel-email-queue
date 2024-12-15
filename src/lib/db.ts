@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { isDevelopment } from "./utils";
 
 const { Pool } = pg;
 dotenv.config();
@@ -10,11 +11,15 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const sslConfig = !isDevelopment
+  ? {
+      ca: fs.readFileSync(path.resolve(__dirname, "./certs/us-east-1-bundle.pem")),
+    }
+  : undefined;
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: {
-    ca: fs.readFileSync(path.resolve(__dirname, "./certs/us-east-1-bundle.pem")),
-  },
+  ssl: sslConfig,
 });
 
 export const query = async (text: string, params: (string | number)[]) => {

@@ -35,15 +35,16 @@ type Props = {
   body: string;
   replyToEmail?: string;
 };
-export async function sendEmailSES({ senderEmail, senderName, recipient, subject, body, replyToEmail }: Props) {
-  if (!senderEmail || !senderName || !recipient || !subject || !body) {
-    throw new AppError(
-      "BAD_REQUEST",
-      "Missing required parameters. Required parameters are senderEmail, senderName, recipient, subject, body",
-    );
-  }
 
-  const sendEmailCommand = new SendEmailCommand({
+const getSendEmailCommand = (
+  senderEmail: string,
+  senderName: string,
+  recipient: string,
+  subject: string,
+  body: string,
+  replyToEmail?: string,
+) => {
+  return new SendEmailCommand({
     Destination: {
       /* required */
       CcAddresses: [
@@ -84,11 +85,55 @@ export async function sendEmailSES({ senderEmail, senderName, recipient, subject
         }
       : {}),
   });
+};
+
+export async function sendEmailSES({ senderEmail, senderName, recipient, subject, body, replyToEmail }: Props) {
+  if (!senderEmail || !senderName || !recipient || !subject || !body) {
+    throw new AppError(
+      "BAD_REQUEST",
+      "Missing required parameters. Required parameters are senderEmail, senderName, recipient, subject, body",
+    );
+  }
+
+  const sendEmailCommand = getSendEmailCommand(senderEmail, senderName, recipient, subject, body, replyToEmail);
 
   try {
     const response = await sesClient.send(sendEmailCommand);
     return { success: true, message: response };
   } catch (e) {
+    return { success: false, message: null, error: e };
+  }
+}
+
+export async function sendEmailSESWithCredentials({
+  senderEmail,
+  senderName,
+  recipient,
+  subject,
+  body,
+  replyToEmail,
+  credentials,
+}: Props & { credentials: { accessKeyId: string; secretAccessKey: string; region: string } }) {
+  if (!senderEmail || !senderName || !recipient || !subject || !body) {
+    throw new Error(
+      "Missing required parameters. Required parameters are senderEmail, senderName, recipient, subject, body",
+    );
+  }
+
+  const sendEmailCommand = getSendEmailCommand(senderEmail, senderName, recipient, subject, body, replyToEmail);
+
+  try {
+    const sesClient = new SESClient({
+      region: credentials.region,
+      credentials: {
+        accessKeyId: credentials.accessKeyId,
+        secretAccessKey: credentials.secretAccessKey,
+      },
+    });
+    const response = await sesClient.send(sendEmailCommand);
+    return { success: true, message: response };
+  } catch (e) {
+    console.error(e);
     return { success: false, message: null, error: e };
   }
 }
