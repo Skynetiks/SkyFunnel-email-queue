@@ -3,16 +3,16 @@ import { SendEmailCommand, SESClient, SESClientConfig } from "@aws-sdk/client-se
 import { AppError } from "./errorHandler";
 dotenv.config();
 
-if (!process.env.S3_REGION) {
-  throw new Error("S3_REGION is required");
+if (!process.env.SES_REGION) {
+  throw new Error("SES_REGION is required");
 }
 
-if (!process.env.S3_ACCESS_KEY_ID) {
-  throw new Error("S3_ACCESS_KEY_ID is required");
+if (!process.env.SES_ACCESS_KEY) {
+  throw new Error("SES_ACCESS_KEY is required");
 }
 
-if (!process.env.S3_SECRET_ACCESS_KEY) {
-  throw new Error("S3_SECRET_ACCESS_KEY is required");
+if (!process.env.SES_SECRET_KEY) {
+  throw new Error("SES_SECRET_KEY is required");
 }
 
 if (!process.env.CONFIGURATION_SET) {
@@ -20,10 +20,10 @@ if (!process.env.CONFIGURATION_SET) {
 }
 
 const sesClient: SESClient = new SESClient({
-  region: process.env.S3_REGION,
+  region: process.env.SES_REGION,
   credentials: {
-    accessKeyId: process.env.S3_ACCESS_KEY_ID,
-    secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+    accessKeyId: process.env.SES_ACCESS_KEY,
+    secretAccessKey: process.env.SES_SECRET_KEY,
   },
 } as SESClientConfig);
 

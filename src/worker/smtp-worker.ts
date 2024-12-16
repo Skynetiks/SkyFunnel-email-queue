@@ -63,7 +63,7 @@ async function sendEmailAndUpdateStatus(
 
   const { emailBodyHTML, footer, header } = getEmailBody({
     campaignId: email.emailCampaignId,
-    rawBodyHTML: campaign.bodyHTML,
+    rawBodyHTML: campaign.campaignContentType === "TEXT" ? campaign.plainTextBody : campaign.bodyHTML,
     emailId: email.id,
     leadFirstName: email.leadFirstName || "",
     leadLastName: email.leadLastName || "",

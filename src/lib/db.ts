@@ -8,8 +8,6 @@ import { isDevelopment } from "./utils";
 const { Pool } = pg;
 dotenv.config();
 
-export let pool: pg.Pool | undefined;
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const sslOptions = !isDevelopment
@@ -18,35 +16,25 @@ const sslOptions = !isDevelopment
     }
   : undefined;
 
-function getPool() {
-  try {
-    if (pool) {
-      console.log("Using existing pool");
-      return pool;
-    }
+let pool: pg.Pool | undefined;
 
+export function getPool() {
+  if (!pool) {
     console.log("Creating new pool");
-
     pool = new Pool({
       connectionString: process.env.DATABASE_URL,
       ssl: sslOptions,
       idleTimeoutMillis: 30000, // 30 seconds
-      max: 100, // Limit the number of concurrent connections
+      max: 100, // Maximum concurrent connections
     });
-
-    return pool;
-  } catch (error) {
-    console.error("Failed to create a connection pool:", error);
-    throw error; // Ensure the application knows about the critical failure
   }
+  return pool;
 }
 
-
-
-getPool()
+getPool();
 export const query = async (text: string, params: (string | number)[]) => {
+  const activePool = await getPool().connect(); // Acquire client
   try {
-    const activePool = await getPool().connect();
     if (!activePool) {
       throw new Error("Database pool is not initialized");
     }
@@ -55,12 +43,12 @@ export const query = async (text: string, params: (string | number)[]) => {
   } catch (error) {
     console.error("Query execution failed:", error);
     throw error;
+  } finally {
+    activePool.release(); // Always release the client
   }
 };
 
-
 export default pool;
-
 
 process.on("SIGINT", async () => {
   if (pool) {
