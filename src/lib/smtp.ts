@@ -129,17 +129,12 @@ type Email = {
   replyToEmail?: string;
 };
 
-// TODO: I don't know if there is need to keep the message id and timestamp
 export async function sendSMTPEmail(email: Email, smtpCredentials: SMTPCredentials) {
   const { body, senderEmail, senderName, recipient, subject, replyToEmail } = email;
   const plainTextBody = convertHtmlToText(body);
 
-  const messageId = uuidv4();
-  const timestamp = Date.now();
-
   // Prepare the email options
   const mailOptions = {
-    messageId: `<${messageId}-${timestamp}@skyfunnel.us>`,
     from: `${senderName} <${senderEmail}>`,
     sender: process.env.ADMIN_SMTP_EMAIL,
     to: recipient,
@@ -176,7 +171,9 @@ export async function smtpErrorHandler(error: unknown, job: Job<AddSMTPRoutePara
     if(!job.data.campaignOrg.id) {
       throw new AppError("INTERNAL_SERVER_ERROR", "Campaign organization id not found", false, "HIGH");
     }
-    await smtpQueue.delayRemainingJobs(job.data.email.emailCampaignId, 86400);
+
+    const ONE_DAY_IN_SECONDS = 86400;
+    await smtpQueue.delayRemainingJobs(job.data.email.emailCampaignId, ONE_DAY_IN_SECONDS);
     return;
   }
 

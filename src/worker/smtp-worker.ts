@@ -100,9 +100,8 @@ async function sendEmailAndUpdateStatus(
     );
 
     if (emailSent && emailSent.accepted && emailSent.messageId) {
-      const updateEmailResult = query('UPDATE "Email" SET status = $1, "awsMessageId" = $2 WHERE id = $3', [
+      const updateEmailResult = query('UPDATE "Email" SET status = $1 WHERE id = $2', [
         "SENT",
-        emailSent.messageId || "",
         email.id,
       ]);
 
