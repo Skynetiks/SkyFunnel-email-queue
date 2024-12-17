@@ -141,8 +141,9 @@ const worker = new Worker(SMTP_EMAIL_QUEUE_KEY, handleJob, {
 });
 
 worker.on("failed", async (job) => {
-  if (job && "id" in job.data) {
-    await query('UPDATE "Email" SET status = $1 WHERE id = $2', ["ERROR", job.data.id]);
+  if (job && "id" in job.data.email) {
+    console.log("Updating email status to ERROR");
+    await query('UPDATE "Email" SET status = $1 WHERE id = $2', ["ERROR", job.data.email.id]);
   }
 
   console.error("[SMTP_WORKER] Job failed");
