@@ -1,6 +1,6 @@
 import { ADMIN_WORKER_QUEUE_CONFIG } from "../config";
 import { AppError, errorHandler } from "../lib/errorHandler";
-import { sendEmailSMTP } from "../lib/smtp";
+import { sendEmailSMTPAdmin } from "../lib/smtp";
 import { AdminWorkerEmailSchema } from "./types/email";
 
 export const handleJob = async (data: unknown) => {
@@ -15,15 +15,15 @@ export const handleJob = async (data: unknown) => {
       throw new AppError("INTERNAL_SERVER_ERROR", "ADMIN_SENDER_PASSWORD is not set", false, "HIGH");
     }
 
-    const sentEmail = await sendEmailSMTP({
-      senderEmail: ADMIN_WORKER_QUEUE_CONFIG.senderEmail,
-      senderName: ADMIN_WORKER_QUEUE_CONFIG.senderName,
-      recipient: email.to,
-      subject: email.subject,
-      body: email.body,
-      replyToEmail: ADMIN_WORKER_QUEUE_CONFIG.replyToEmail,
-      attachments: email.attachments,
-    });
+    const sentEmail = await sendEmailSMTPAdmin(
+      ADMIN_WORKER_QUEUE_CONFIG.senderEmail,
+      ADMIN_WORKER_QUEUE_CONFIG.senderName,
+      email.to,
+      email.subject,
+      email.body,
+      ADMIN_WORKER_QUEUE_CONFIG.replyToEmail,
+      email.attachments,
+    );
 
     if (!sentEmail.accepted && !sentEmail.messageId) {
       console.error("Error sending email:", sentEmail.response);

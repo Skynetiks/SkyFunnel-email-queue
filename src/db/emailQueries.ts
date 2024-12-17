@@ -16,9 +16,18 @@ export const getUserById = async (userId: string) => {
   return response.rows[0];
 };
 
+
+export const getOrganizationById = async (organizationId: string) => {
+  const response = await query('SELECT * FROM "Organization" WHERE id = $1', [organizationId]);
+  if (response.rows.length === 0) {
+    return null;
+  }
+  return response.rows[0];
+};
+
 export const getCampaignById = async (campaignId: string) => {
   const response = await query(
-    'SELECT ec.*, ect.* FROM "EmailCampaign" ec JOIN "EmailCampaignTemplate" ect ON ec."emailCampaignTemplateId" = ect.id WHERE ec.id = $1;',
+    'SELECT ec.*, ect.* FROM "EmailCampaign" ec LEFT JOIN "EmailCampaignTemplate" ect ON ec."emailCampaignTemplateId" = ect.id WHERE ec.id = $1;',
     [campaignId],
   );
   if (response.rows.length === 0) {

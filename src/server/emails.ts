@@ -1,139 +1,289 @@
+import { AddBulkSkyfunnelSesRouteParamType, AddSESEmailRouteParamsType, SESJobOptions } from "./types/emailQueue";
+import { Job, JobType, Queue } from "bullmq";
 import { DEFAULT_JOB_OPTIONS, DefaultPrioritySlug, getPriority, PAUSE_CAMPAIGN_LIST_KEY } from "../config";
 import { AppError } from "../lib/errorHandler";
 import { getRedisConnection } from "../lib/redis";
 import { generateJobId } from "../lib/utils";
-import { getQueue } from "./queue";
-import { AddBulkRouteParamsType, AddEmailRouteParamsType } from "./types/emailQueue";
+import { emailQueueManager } from "./queue";
+import { AddBulkSMTPRouteParamType, AddSMTPRouteParamsType, SMTPJobOptions } from "./types/smtpQueue";
 
-export const addBulkEmailsToQueue = async (
-  { campaignOrg, emails, interval }: AddBulkRouteParamsType,
-  prioritySlug: string = DefaultPrioritySlug,
-) => {
-  if (!emails.length || !emails[0]?.emailCampaignId) {
-    throw new AppError("BAD_REQUEST", "Either emails or emailCampaignId is missing");
+class BaseEmailQueue {
+  protected emailQueue: Queue | undefined;
+
+  constructor(queue: Queue) {
+    this.emailQueue = queue;
   }
 
-  const emailQueue = await getQueue();
-  if (!emailQueue) {
-    throw new AppError("INTERNAL_SERVER_ERROR", "Queue not initialized Successfully", false, "HIGH");
+  async getBullMqStats() {
+    const queue = this.emailQueue;
+    const counts = await queue?.getJobCounts();
+
+    return counts;
   }
 
-  const priorityNumber = getPriority(prioritySlug);
+  async getJobsByJobIdKeyword(keyword: string, types: JobType[] = ["delayed", "paused", "waiting"], chunkSize = 100) {
+    let finalJobs: Job[] = [];
+    let start = 0;
 
-  const jobs = emails.map((email, index) => {
-    const delay = index * interval * 1000;
-    const jobId = generateJobId(email.emailCampaignId, email.id);
+    while (true) {
+      const queue = this.getQueue();
+      const jobs = await queue.getJobs(types, start, start + chunkSize - 1);
+      if (!jobs.length) break;
+      finalJobs = finalJobs.concat(jobs.filter((job) => job.id?.includes(keyword)));
+      start += chunkSize;
+    }
 
-    return {
-      name: email.id,
-      data: { email, campaignOrg },
-      opts: { ...DEFAULT_JOB_OPTIONS, delay, jobId, priority: priorityNumber },
-    };
-  });
-
-  await emailQueue.addBulk(jobs);
-};
-
-export const addEmailToQueue = async (
-  { email, campaignOrg }: AddEmailRouteParamsType,
-  prioritySlug: string = DefaultPrioritySlug,
-) => {
-  const emailQueue = await getQueue();
-  if (!emailQueue) {
-    throw new AppError("INTERNAL_SERVER_ERROR", "Queue not initialized Successfully", false, "HIGH");
+    return finalJobs;
   }
 
-  const priorityNumber = getPriority(prioritySlug);
-
-  const jobId = generateJobId(email.emailCampaignId, email.id);
-
-  await emailQueue.add(
-    email.id,
-    { email, campaignOrg },
-    { ...DEFAULT_JOB_OPTIONS, jobId: jobId, priority: priorityNumber },
-  );
-};
-
-export const cancelEmails = async (campaignId: string) => {
-  const emailQueue = await getQueue();
-  const redisClient = await getRedisConnection();
-
-  if (!emailQueue || !redisClient) {
-    throw new AppError("INTERNAL_SERVER_ERROR", "Queue Or Redis not initialized Successfully", false, "HIGH");
+  getQueue() {
+    if (!this.emailQueue) {
+      throw new AppError(
+        "INTERNAL_SERVER_ERROR",
+        "Queue not initialized Successfully or Called before initialization",
+        false,
+        "HIGH",
+      );
+    }
+    return this.emailQueue;
   }
 
-  console.time();
+  async delayRemainingJobs(campaignId: string, delayInSeconds: number) {
+    const jobs = await this.getJobsByJobIdKeyword(campaignId, ["delayed", "paused", "waiting"]);
+    if (!jobs.length) {
+      console.log(`No jobs found for campaignId: ${campaignId}`);
+      return 0;
+    }
 
-  const jobs = await emailQueue.getJobs(["delayed", "paused", "waiting"]);
+    console.time("Delay remaining jobs");
 
-  // Filter jobs to cancel only those with the specified campaignId in their job ID
-  const jobsToCancel = jobs.filter((job) => job.id?.includes(campaignId));
+    const delayedTimestamp = new Date(Date.now() + delayInSeconds * 1000).getTime();
+    const jobsDelayPromise = jobs.map(async (job) => {
+      const state = await job.getState();
+      if (["waiting", "paused", "delayed"].includes(state)) return;
 
-  const jobsCancelPromises = jobsToCancel.map(async (job) => {
-    job.remove();
-  });
+      if (state === "delayed") {
+        job.changeDelay(delayInSeconds * 1000);
+      } else {
+        job.moveToDelayed(delayedTimestamp);
+      }
+    });
 
-  await Promise.allSettled(jobsCancelPromises);
-  console.timeEnd();
-  return jobsToCancel.length;
-};
+    const results = await Promise.allSettled(jobsDelayPromise);
 
-// =================================== Pause and Resume Campaign ===================================
+    const failedJobs = results.filter((result) => result.status === "rejected");
+    failedJobs.forEach((result, index) => {
+      console.error(`Failed to delay job ${jobs[index]?.id}:`, result.reason);
+    });
 
-export const pauseCampaign = async (campaignId: string) => {
-  const redisClient = await getRedisConnection();
-  if (!redisClient) {
-    throw new AppError("INTERNAL_SERVER_ERROR", "Redis not initialized Successfully", false, "HIGH");
+    console.timeEnd("Delay remaining jobs");
+
+    return { successJobs: results.length - failedJobs.length, failedJobs: failedJobs.length };
   }
 
-  const isPaused = await isCampaignPaused(campaignId);
-  if (isPaused) {
-    throw new AppError("BAD_REQUEST", "Campaign is already paused");
+  async cancelEmails(campaignId: string) {
+    const emailQueue = this.emailQueue;
+    const redisClient = await getRedisConnection();
+
+    if (!emailQueue || !redisClient) {
+      throw new AppError("INTERNAL_SERVER_ERROR", "Queue Or Redis not initialized Successfully", false, "HIGH");
+    }
+
+    console.time();
+
+    const jobs = await this.getJobsByJobIdKeyword(campaignId);
+
+    // Filter jobs to cancel only those with the specified campaignId in their job ID
+    const jobsToCancel = jobs.filter((job) => job.id?.includes(campaignId));
+
+    const jobsCancelPromises = jobsToCancel.map(async (job) => {
+      job.remove();
+    });
+
+    const results = await Promise.allSettled(jobsCancelPromises);
+    results.forEach((result, index) => {
+      if (result.status === "rejected") {
+        console.error(`Failed to cancel job ${jobsToCancel[index]?.id}:`, result.reason);
+      }
+    });
+
+    await redisClient.srem(PAUSE_CAMPAIGN_LIST_KEY, campaignId);
+
+    console.timeEnd();
+    return jobsToCancel.length;
   }
 
-  const response = await redisClient.sadd(PAUSE_CAMPAIGN_LIST_KEY, campaignId);
-  if (!response) {
-    throw new AppError("INTERNAL_SERVER_ERROR", "Something Went Wrong while pausing campaign", false, "HIGH");
+  async pauseCampaign(campaignId: string) {
+    const redisClient = await getRedisConnection();
+    if (!redisClient) {
+      throw new AppError("INTERNAL_SERVER_ERROR", "Redis not initialized Successfully", false, "HIGH");
+    }
+
+    const isPaused = await this.isCampaignPaused(campaignId);
+    if (isPaused) {
+      throw new AppError("BAD_REQUEST", "Campaign is already paused");
+    }
+
+    const response = await redisClient.sadd(PAUSE_CAMPAIGN_LIST_KEY, campaignId);
+    if (!response) {
+      throw new AppError("INTERNAL_SERVER_ERROR", "Something Went Wrong while pausing campaign", false, "HIGH");
+    }
+
+    return true;
   }
 
-  return true;
-};
+  async resumeCampaign(campaignId: string) {
+    const redisClient = await getRedisConnection();
+    if (!redisClient) {
+      throw new AppError("INTERNAL_SERVER_ERROR", "Redis not initialized Successfully", false, "HIGH");
+    }
 
-export const resumeCampaign = async (campaignId: string) => {
-  const redisClient = await getRedisConnection();
-  if (!redisClient) {
-    throw new AppError("INTERNAL_SERVER_ERROR", "Redis not initialized Successfully", false, "HIGH");
+    const isPaused = await this.isCampaignPaused(campaignId);
+    if (!isPaused) {
+      throw new AppError("BAD_REQUEST", "Campaign is not paused");
+    }
+
+    const response = await redisClient.srem(PAUSE_CAMPAIGN_LIST_KEY, campaignId);
+    if (!response) {
+      throw new AppError("INTERNAL_SERVER_ERROR", "Something Went Wrong while resuming campaign", false, "HIGH");
+    }
+
+    return true;
   }
 
-  const isPaused = await isCampaignPaused(campaignId);
-  if (!isPaused) {
-    throw new AppError("BAD_REQUEST", "Campaign is not paused");
+  async getPausedCampaigns() {
+    const redisClient = await getRedisConnection();
+    if (!redisClient) {
+      throw new AppError("INTERNAL_SERVER_ERROR", "Redis not initialized Successfully", false, "HIGH");
+    }
+
+    const pausedCampaigns = await redisClient.smembers(PAUSE_CAMPAIGN_LIST_KEY);
+    return pausedCampaigns;
   }
 
-  const response = await redisClient.srem(PAUSE_CAMPAIGN_LIST_KEY, campaignId);
-  if (!response) {
-    throw new AppError("INTERNAL_SERVER_ERROR", "Something Went Wrong while resuming campaign", false, "HIGH");
+  async isCampaignPaused(campaignId: string) {
+    const redisClient = await getRedisConnection();
+    if (!redisClient) {
+      throw new AppError("INTERNAL_SERVER_ERROR", "Redis not initialized Successfully", false, "HIGH");
+    }
+
+    const isPaused = await redisClient.sismember(PAUSE_CAMPAIGN_LIST_KEY, campaignId);
+    return !!isPaused;
+  }
+}
+
+class SkyFunnelSESQueue extends BaseEmailQueue {
+  constructor() {
+    const emailQueue = emailQueueManager.getSkyfunnelInstance();
+    if (!emailQueue) {
+      throw new AppError("INTERNAL_SERVER_ERROR", "SkyFunnel Email Queue not initialized", false, "HIGH");
+    }
+    super(emailQueue);
   }
 
-  return true;
-};
+  async addBulkEmailsToQueue(
+    { campaignOrg, emails, interval }: AddBulkSkyfunnelSesRouteParamType,
+    prioritySlug: string = DefaultPrioritySlug,
+  ) {
+    if (!emails.length || !emails[0]?.emailCampaignId) {
+      throw new AppError("BAD_REQUEST", "Either emails or emailCampaignId is missing");
+    }
 
-export const getPausedCampaigns = async () => {
-  const redisClient = await getRedisConnection();
-  if (!redisClient) {
-    throw new AppError("INTERNAL_SERVER_ERROR", "Redis not initialized Successfully", false, "HIGH");
+    const emailQueue = this.emailQueue;
+    if (!emailQueue) {
+      throw new AppError("INTERNAL_SERVER_ERROR", "Queue not initialized Successfully", false, "HIGH");
+    }
+
+    const priorityNumber = getPriority(prioritySlug);
+
+    const jobs = emails.map((email, index) => {
+      const delay = index * interval * 1000;
+      const jobId = generateJobId(email.emailCampaignId, email.id, "SES");
+
+      return {
+        name: email.id,
+        data: { email, campaignOrg },
+        opts: { ...DEFAULT_JOB_OPTIONS, delay, jobId, priority: priorityNumber },
+      };
+    }) satisfies SESJobOptions;
+
+    await emailQueue.addBulk(jobs);
   }
 
-  const pausedCampaigns = await redisClient.smembers(PAUSE_CAMPAIGN_LIST_KEY);
-  return pausedCampaigns;
-};
+  async addEmailToQueue(
+    { email, campaignOrg }: AddSESEmailRouteParamsType,
+    prioritySlug: string = DefaultPrioritySlug,
+  ) {
+    const emailQueue = this.emailQueue;
+    if (!emailQueue) {
+      throw new AppError("INTERNAL_SERVER_ERROR", "Queue not initialized Successfully", false, "HIGH");
+    }
 
-export const isCampaignPaused = async (campaignId: string) => {
-  const redisClient = await getRedisConnection();
-  if (!redisClient) {
-    throw new AppError("INTERNAL_SERVER_ERROR", "Redis not initialized Successfully", false, "HIGH");
+    const priorityNumber = getPriority(prioritySlug);
+
+    const jobId = generateJobId(email.emailCampaignId, email.id, "SES");
+
+    const data = { email, campaignOrg } satisfies AddSESEmailRouteParamsType;
+    await emailQueue.add(email.id, data, { ...DEFAULT_JOB_OPTIONS, jobId: jobId, priority: priorityNumber });
+  }
+}
+
+export const skyfunnelSesQueue = new SkyFunnelSESQueue();
+
+class SMTPQueue extends BaseEmailQueue {
+  constructor() {
+    const emailQueue = emailQueueManager.getSMTPInstance();
+    if (!emailQueue) {
+      throw new AppError("INTERNAL_SERVER_ERROR", "SkyFunnel Email Queue not initialized", false, "HIGH");
+    }
+    super(emailQueue);
   }
 
-  const isPaused = await redisClient.sismember(PAUSE_CAMPAIGN_LIST_KEY, campaignId);
-  return !!isPaused;
-};
+  async addBulkEmailsToQueue(
+    { campaignOrg, emails, interval, smtpCredentials }: AddBulkSMTPRouteParamType,
+    prioritySlug: string = DefaultPrioritySlug,
+  ) {
+    if (!emails.length || !emails[0]?.emailCampaignId) {
+      throw new AppError("BAD_REQUEST", "Either emails or emailCampaignId is missing");
+    }
+
+    const emailQueue = this.emailQueue;
+    if (!emailQueue) {
+      throw new AppError("INTERNAL_SERVER_ERROR", "Queue not initialized Successfully", false, "HIGH");
+    }
+
+    const priorityNumber = getPriority(prioritySlug);
+
+    const jobs = emails.map((email, index) => {
+      const delay = index * interval * 1000;
+      const jobId = generateJobId(email.emailCampaignId, email.id, "SMTP");
+
+      return {
+        name: email.id,
+        data: { email, campaignOrg, smtpCredentials },
+        opts: { ...DEFAULT_JOB_OPTIONS, delay, jobId, priority: priorityNumber },
+      };
+    }) satisfies SMTPJobOptions;
+
+    await emailQueue.addBulk(jobs);
+  }
+
+  async addEmailToQueue(
+    { email, campaignOrg, smtpCredentials }: AddSMTPRouteParamsType,
+    prioritySlug: string = DefaultPrioritySlug,
+  ) {
+    const emailQueue = this.emailQueue;
+    if (!emailQueue) {
+      throw new AppError("INTERNAL_SERVER_ERROR", "Queue not initialized Successfully", false, "HIGH");
+    }
+
+    const priorityNumber = getPriority(prioritySlug);
+
+    const jobId = generateJobId(email.emailCampaignId, email.id, "SMTP");
+
+    const data = { campaignOrg, email, smtpCredentials } satisfies AddSMTPRouteParamsType;
+    await emailQueue.add(email.id, data, { ...DEFAULT_JOB_OPTIONS, jobId: jobId, priority: priorityNumber });
+  }
+}
+
+export const smtpQueue = new SMTPQueue();

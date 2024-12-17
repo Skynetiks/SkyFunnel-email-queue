@@ -1,7 +1,10 @@
 import { JobsOptions } from "bullmq";
 
-export const EMAIL_QUEUE_KEY = "EMAIL_SENDING_QUEUE";
-export const PAUSE_CAMPAIGN_LIST_KEY = `${EMAIL_QUEUE_KEY}:pause-campaign-list`;
+export const SMTP_EMAIL_QUEUE_KEY = "SMTP_EMAIL_SENDING_QUEUE";
+export const SES_SKYFUNNEL_EMAIL_QUEUE_KEY = "SES_SKYFUNNEL_EMAIL_SENDING_QUEUE";
+export const SENDER_IDENTITY_KEY = "SENDER_IDENTITY_SENDING_QUEUE";
+
+export const PAUSE_CAMPAIGN_LIST_KEY = `EMAIL_SENDING_QUEUE:pause-campaign-list`;
 
 export const QUEUE_CONFIG = {
   concurrency: 10,
@@ -43,6 +46,8 @@ export const getPriority = (priority: string): number => {
 
   return PriorityObject[priority];
 };
+
+export const ErrorCodesToRetrySMTPEmailAfterOneDay = [550]
 
 // ============================== Admin Worker ==============================
 

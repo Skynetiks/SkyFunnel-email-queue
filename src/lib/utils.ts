@@ -16,9 +16,9 @@ export function isNumeric(str: string) {
  * @param emailId - The emailId of the email
  * @returns A random job id
  */
-export const generateJobId = (campaignId: string, emailId: string) => {
+export const generateJobId = (campaignId: string, emailId: string, type: "SES" | "SMTP") => {
   const randomJobId = crypto.randomUUID();
-  return `${campaignId}-${emailId}-${randomJobId.slice(0, 8)}`;
+  return `${type}-${campaignId}-${emailId}-${randomJobId.slice(0, 8)}`;
 };
 
 /**
@@ -40,4 +40,25 @@ export function replaceUrlsInEmailHtml(campaign: { id: string; bodyHTML: string 
   });
 
   return campaign.bodyHTML;
+}
+
+export const isDevelopment = process.env.NODE_ENV === "development";
+export const getDelayedJobId = (jobId: string) => {
+  const baseJobId = jobId?.split("-delayed")[0];
+  const delayCountMatch = jobId?.match(/-delayed-(\d+)$/);
+  const delayCount = delayCountMatch ? parseInt(delayCountMatch[1], 10) : 0;
+
+  // Generate a new job ID with an incremented delay count
+  const newJobId = `${baseJobId}-delayed-${delayCount + 1}`;
+
+  return newJobId;
+}
+
+
+export const convertHtmlToText = (html: string) => {
+  const plainTextBody = html
+  .replace(/<br\s*\/?>/g, "\n") // Replace HTML line breaks with newlines
+  .replace(/<\/?[^>]+(>|$)/g, ""); // Strip out all HTML tags
+
+  return plainTextBody;
 }

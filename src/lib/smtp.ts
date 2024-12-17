@@ -1,57 +1,42 @@
 import nodemailer from "nodemailer";
-import { AppError } from "./errorHandler";
-import { Attachment } from "nodemailer/lib/mailer";
-import { htmlToText } from "html-to-text";
 import DKIM from "nodemailer/lib/dkim";
-import { Options } from "nodemailer/lib/mailer";
+import { Attachment, Options } from "nodemailer/lib/mailer";
+import SMTPTransport from "nodemailer/lib/smtp-transport";
 import { v4 as uuidv4 } from "uuid";
+import { convertHtmlToText } from "./utils";
+import { AddSMTPRouteParamsType, SMTPCredentials } from "../server/types/smtpQueue";
+import { decryptToken } from "./decrypt";
+import { ErrorCodesToRetrySMTPEmailAfterOneDay } from "../config";
+import { Job } from "bullmq";
+import { smtpQueue } from "../server/emails";
+import { AppError } from "./errorHandler";
 
-interface SendEmailSMTPParams {
-  senderEmail: string;
-  senderName: string;
-  recipient: string;
-  subject: string;
-  body: string;
-  replyToEmail?: string;
-  attachments?: Attachment[];
-}
-
-export async function sendEmailSMTP({
-  senderEmail,
-  senderName,
-  recipient,
-  subject,
-  body,
-  replyToEmail,
-  attachments,
-}: SendEmailSMTPParams) {
+export async function sendEmailSMTPAdmin(
+  senderEmail: string,
+  senderName: string,
+  recipient: string,
+  subject: string,
+  body: string,
+  replyToEmail?: string,
+  attachments?: Attachment[],
+) {
   try {
     if (!process.env.SMTP_HOST) {
-      throw new AppError("INTERNAL_SERVER_ERROR", "SMTP_HOST is not set", false, "HIGH");
+      console.error("Missing SMTP_HOST");
     }
     if (!process.env.ADMIN_SMTP_EMAIL) {
-      throw new AppError("BAD_REQUEST", "ADMIN_SMTP_EMAIL is not provided");
+      console.error("Missing ADMIN_SMTP_EMAIL");
     }
     if (!process.env.ADMIN_SMTP_PASS) {
-      throw new AppError("BAD_REQUEST", "ADMIN_SMTP_PASS is not provided");
+      console.error("Missing ADMIN_SMTP_PASS");
     }
     if (!process.env.DKIM_PRIVATE_KEY) {
-      throw new AppError("BAD_REQUEST", "DKIM_PRIVATE_KEY is not provided");
-    }
-    if (!senderEmail) {
-      throw new AppError("BAD_REQUEST", "Sender email not provided");
+      console.error("Missing DKIM_PRIVATE_KEY");
     }
 
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: 465,
-      secure: true,
-      auth: {
-        user: process.env.ADMIN_SMTP_EMAIL,
-        pass: process.env.ADMIN_SMTP_PASS,
-      },
-    });
+    // Generate a plain text alternative from the HTML body
 
+    const plainTextBody = convertHtmlToText(body);
     const pkey = process.env.DKIM_PRIVATE_KEY;
 
     const dkim = {
@@ -70,9 +55,7 @@ export async function sendEmailSMTP({
       sender: process.env.ADMIN_SMTP_EMAIL,
       to: recipient,
       subject: subject,
-      text: htmlToText(body, {
-        wordwrap: 130,
-      }),
+      text: plainTextBody,
       html: body,
       replyTo: replyToEmail || senderEmail,
       envelope: {
@@ -81,26 +64,119 @@ export async function sendEmailSMTP({
       },
       dkim: dkim,
       attachDataUrls: true,
-      attachments: attachments || [],
       headers: {
         "Feedback-ID": `feedback-${messageId}`,
       },
-    } as Options;
+      attachments: attachments,
+    } satisfies Options;
 
-    const info = await transporter.sendMail(mailOptions);
-    transporter.close();
+    const info = await sendNodemailerEmailRaw(
+      {
+        host: process.env.SMTP_HOST!,
+        port: 465,
+        secure: true,
+        user: process.env.ADMIN_SMTP_EMAIL!,
+        pass: process.env.ADMIN_SMTP_PASS!,
+      },
+      mailOptions,
+    );
 
     console.log("Email sent:", info.messageId);
-
-    if (!info) {
-      throw new AppError("INTERNAL_SERVER_ERROR", "Email not sent by SMTP");
-    }
-
     return info;
   } catch (error) {
     console.error("Error sending email:", error);
-    if (error instanceof AppError) throw error;
-    if (error instanceof Error) throw new AppError("INTERNAL_SERVER_ERROR", error.message);
-    throw new AppError("INTERNAL_SERVER_ERROR", "Error sending email");
+    throw error;
   }
+}
+
+type Credentials = {
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  pass: string;
+};
+
+async function sendNodemailerEmailRaw({ host, port, secure, user, pass }: Credentials, options: Options) {
+  let transporter: nodemailer.Transporter | undefined;
+  try {
+    transporter = nodemailer.createTransport({
+      host: host,
+      port: port,
+      secure: secure,
+      auth: {
+        user: user,
+        pass: pass,
+      },
+      debug: process.env.NODE_ENV === "development" && process.env.SMTP_DEBUG !== "false",
+      logger: process.env.NODE_ENV === "development" && process.env.SMTP_DEBUG !== "false",
+    });
+  
+    const info = await transporter.sendMail(options);
+
+    return info as SMTPTransport.SentMessageInfo;
+  } finally {
+    transporter?.close();
+  }
+}
+
+type Email = {
+  senderEmail: string;
+  senderName: string;
+  recipient: string;
+  subject: string;
+  body: string;
+  replyToEmail?: string;
+};
+
+export async function sendSMTPEmail(email: Email, smtpCredentials: SMTPCredentials) {
+  const { body, senderEmail, senderName, recipient, subject, replyToEmail } = email;
+  const plainTextBody = convertHtmlToText(body);
+
+  // Prepare the email options
+  const mailOptions = {
+    from: `${senderName} <${senderEmail}>`,
+    sender: process.env.ADMIN_SMTP_EMAIL,
+    to: recipient,
+    subject: subject,
+    text: plainTextBody,
+    html: body,
+    replyTo: replyToEmail || senderEmail,
+    attachDataUrls: true,
+  } satisfies Options;
+
+  const decryptedPass = decryptToken(smtpCredentials.encryptedPass)
+  const info = await sendNodemailerEmailRaw(
+    {
+      host: smtpCredentials.host,
+      port: smtpCredentials.port,
+      secure: smtpCredentials.port === 465,
+      user: smtpCredentials.user,
+      pass: decryptedPass,
+    },
+    mailOptions,
+  );
+
+  console.log("Email sent:", info.messageId);
+  return info;
+}
+
+
+export async function smtpErrorHandler(error: unknown, job: Job<AddSMTPRouteParamsType>) {
+  if (!(error instanceof Error && "responseCode" in error && typeof error.responseCode === "number")) throw error;
+
+  const responseCode = error.responseCode;
+  if(ErrorCodesToRetrySMTPEmailAfterOneDay.includes(responseCode)) {
+    console.log("Error code " + responseCode + " detected. Delaying email sending for 1 day......");
+    if(!job.data.campaignOrg.id) {
+      throw new AppError("INTERNAL_SERVER_ERROR", "Campaign organization id not found", false, "HIGH");
+    }
+
+    const ONE_DAY_IN_SECONDS = 86400;
+    await smtpQueue.delayRemainingJobs(job.data.email.emailCampaignId, ONE_DAY_IN_SECONDS);
+    return;
+  }
+
+  console.error("Fail to send email. Error code " + responseCode + " detected.", error);
+  throw error;
 }
