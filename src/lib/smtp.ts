@@ -145,7 +145,7 @@ export async function sendSMTPEmail(email: Email, smtpCredentials: SMTPCredentia
     attachDataUrls: true,
   } satisfies Options;
 
-  const decryptedPass = await decryptToken(smtpCredentials.encryptedPass)
+  const decryptedPass = decryptToken(smtpCredentials.encryptedPass)
   const info = await sendNodemailerEmailRaw(
     {
       host: smtpCredentials.host,
