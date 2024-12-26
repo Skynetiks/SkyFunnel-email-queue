@@ -104,6 +104,7 @@ async function sendNodemailerEmailRaw({ host, port, secure, user, pass }: Creden
       host: host,
       port: port,
       secure: secure,
+      pool: true,
       auth: {
         user: user,
         pass: pass,
@@ -153,6 +154,7 @@ export async function sendSMTPEmail(email: Email, smtpCredentials: SMTPCredentia
       secure: smtpCredentials.port === 465,
       user: smtpCredentials.user,
       pass: decryptedPass,
+      pool: true,
     },
     mailOptions,
   );
