@@ -1,4 +1,5 @@
 import { NextFunction, Request, Response } from "express";
+import { Debug } from "./utils";
 
 type ERROR_LEVELS = "LOW" | "MEDIUM" | "HIGH";
 
@@ -54,7 +55,7 @@ export const expressErrorHandler = (
 ) => {
   if (err instanceof AppError) {
     // Application error
-    console.error(`[ERROR]: [${err.level.toUpperCase()}] ${err.httpStatus} - ${err.description}`);
+    Debug.error(`[ERROR]: [${err.level.toUpperCase()}] ${err.httpStatus} - ${err.description}`);
 
     return res.status(err.httpCode).json({
       message: err.description,
@@ -78,18 +79,19 @@ export const expressErrorHandler = (
 export const errorHandler = (err: unknown, shouldThrowAlways = false) => {
   if (err instanceof AppError) {
     // Application error
-    console.error(`[ERROR]: [${err.level.toUpperCase()}] ${err.httpStatus} - ${err.description}`);
+    Debug.error(`[ERROR]: [${err.level.toUpperCase()}] ${err.httpStatus} - ${err.description}`);
 
     if (err.level === "HIGH" || shouldThrowAlways || !err.isOperational) {
       throw err;
     }
+    
   } else if (err instanceof Error) {
     // Unexpected error
-    console.error(`[ERROR]: [UNEXPECTED] - ${err.message}`);
+    Debug.error(`[ERROR]: [UNEXPECTED] - ${err.message}`);
     throw err;
   } else {
     // Unknown error
-    console.error(`[ERROR]: [UNKNOWN] - ${err}`);
+    Debug.error(`[ERROR]: [UNKNOWN] - ${err}`);
     throw err;
   }
 };

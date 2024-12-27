@@ -62,3 +62,20 @@ export const convertHtmlToText = (html: string) => {
 
   return plainTextBody;
 }
+
+export class Debug {
+  public static devLog(...args: any[]) {  // eslint-disable-line @typescript-eslint/no-explicit-any
+    if (process.env.NODE_ENV === "development" || process.env.SMTP_DEBUG === "true" || process.env.LOGS_DEBUG === "true") {
+      console.log("[DEV]", ...args);
+    }
+  }
+
+  public static log(...args: any[]) {  // eslint-disable-line @typescript-eslint/no-explicit-any
+    console.log(...args);
+  }
+
+  public static error(...args: any[]) {  // eslint-disable-line @typescript-eslint/no-explicit-any
+    console.error(...args);
+  }
+}
+

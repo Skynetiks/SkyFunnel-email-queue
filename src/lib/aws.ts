@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 import { SendEmailCommand, SESClient, SESClientConfig } from "@aws-sdk/client-ses";
 import { AppError } from "./errorHandler";
+import { Debug } from "./utils";
 dotenv.config();
 
 if (!process.env.SES_REGION) {
@@ -133,7 +134,7 @@ export async function sendEmailSESWithCredentials({
     const response = await sesClient.send(sendEmailCommand);
     return { success: true, message: response };
   } catch (e) {
-    console.error(e);
+    Debug.error(e);
     return { success: false, message: null, error: e };
   }
 }

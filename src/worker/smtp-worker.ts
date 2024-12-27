@@ -5,7 +5,7 @@ import { query } from "../lib/db";
 import { AppError, errorHandler } from "../lib/errorHandler";
 import { getCampaignById, getLeadById, getSuppressedEmail, getUserById } from "../db/emailQueries";
 import { getEmailBody } from "../lib/email";
-import { generateJobId, getDelayedJobId } from "../lib/utils";
+import { Debug, generateJobId, getDelayedJobId } from "../lib/utils";
 import { AddSMTPRouteParamsSchema, AddSMTPRouteParamsType, SMTPCredentials } from "../server/types/smtpQueue";
 import { sendSMTPEmail, smtpErrorHandler } from "../lib/smtp";
 import { Email } from "../server/types/emailQueue";
@@ -13,6 +13,8 @@ import { Email } from "../server/types/emailQueue";
 const handleJob = async (job: Job) => {
   console.log("[SMTP_WORKER] Job Started with jobID", job.id);
   const data = job.data;
+  ThrowError()
+
   try {
     const validatedData = AddSMTPRouteParamsSchema.safeParse(data);
     if (!validatedData.success) {
@@ -21,7 +23,7 @@ const handleJob = async (job: Job) => {
 
     const { email, campaignOrg, smtpCredentials } = validatedData.data;
     const isPaused = await smtpQueue.isCampaignPaused(email.emailCampaignId);
-    console.log("isPaused", isPaused);
+    Debug.devLog(isPaused ? "[SMTP_WORKER] Campaign is paused" : "[SMTP_WORKER] Campaign is not paused");
     if (isPaused) {
       const DELAY_TIME = 1000 * QUEUE_CONFIG.delayAfterPauseInSeconds;
 
@@ -74,10 +76,13 @@ async function sendEmailAndUpdateStatus(
   });
 
   if (suppressedResults) {
-    await query('UPDATE "Email" SET status = $1 WHERE id = $2', ["SUPPRESS", email.id]);
+    Debug.devLog("UPDATING EMAIL STATUS TO SUPPRESS FOR EMAIL ID: ", email.id);
+    await query('UPDATE "Email" SET status = $1 WHERE id = $2', ["SUPPRESS", email.id])
+    Debug.devLog("INCREMENTING EMAIL_CAMPAIGN sentEmailCount: ", email.id);
     await query('UPDATE "EmailCampaign" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1', [
       email.emailCampaignId,
     ]);
+    Debug.devLog("ADDING BOUNCE EVENT FOR EMAIL ID: ", email.id);
     await query(
       'INSERT INTO "EmailEvent" ("id", "emailId", "eventType", "timestamp", "campaignId") VALUES (uuid_generate_v4(), $1, $2, $3, $4)',
       [email.id, "BOUNCE", new Date().toISOString(), email.emailCampaignId],
@@ -100,6 +105,7 @@ async function sendEmailAndUpdateStatus(
     );
 
     if (emailSent && emailSent.accepted && emailSent.messageId) {
+      Debug.devLog("UPDATING STATUS FOR THE Email WITH MESSAGE_ID:", emailSent.messageId, "AND RECIPIENT:", email.leadEmail);
       const updateEmailResult = query('UPDATE "Email" SET status = $1, "messageId" = $2 WHERE id = $3', [
         "SENT",
         emailSent.messageId,
@@ -111,11 +117,6 @@ async function sendEmailAndUpdateStatus(
         [email.emailCampaignId],
       );
 
-      // const updateOrganizationResult = query(
-      //   'UPDATE "Organization" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1',
-      //   [campaignOrg.id],
-      // );
-
       const addDeliveryEventResult = query(
         'INSERT INTO "EmailEvent" ("id", "emailId", "eventType", "timestamp", "campaignId") VALUES (uuid_generate_v4(), $1, $2, $3, $4)',
         [email.id, "DELIVERY", new Date().toISOString(), email.emailCampaignId],
@@ -123,8 +124,8 @@ async function sendEmailAndUpdateStatus(
 
       await Promise.all([updateEmailResult, updateCampaignResult, addDeliveryEventResult]);
     } else {
-      console.error("[SMTP_WORKER] Error While Sending Emails via AWS", emailSent ? emailSent.response : "");
-      throw new AppError("INTERNAL_SERVER_ERROR", "Email not sent by AWS");
+      console.error("[SMTP_WORKER] Error While Sending Emails via Smtp for",email.leadEmail, emailSent ? emailSent.response : "");
+      throw new AppError("INTERNAL_SERVER_ERROR", "Email not sent by SMTP");
     }
   } catch (error) {
     smtpErrorHandler(error, job);
@@ -132,8 +133,9 @@ async function sendEmailAndUpdateStatus(
 }
 
 
+
 const redisUrl = process.env.REDIS_URL;
-const worker = new Worker(SMTP_EMAIL_QUEUE_KEY, handleJob, {
+const worker = new Worker(SMTP_EMAIL_QUEUE_KEY, (job) => handleJob(job) , {
   concurrency: QUEUE_CONFIG.concurrency,
   connection: {
     url: redisUrl,
@@ -146,6 +148,9 @@ worker.on("failed", async (job) => {
     console.log("Updating email status to ERROR");
     await query('UPDATE "Email" SET status = $1 WHERE id = $2', ["ERROR", job.data.email.id]);
   }
+  else {
+    Debug.devLog("Failed to update email status to ERROR as there was not email id in the job data", job);
+  }
 
   console.error("[SMTP_WORKER] Job failed");
 });
@@ -154,6 +159,34 @@ worker.on("completed", () => {
   console.log("[SMTP_WORKER] Job completed");
 });
 
+worker.on("error", (error) => {
+  Debug.devLog("[SMTP_WORKER] Error in SMTP worker", error);
+})
+
+worker.on("closing", () => {
+  Debug.devLog("[SMTP_WORKER] SMTP worker is closing");
+})
+
 worker.on("ready", () => {
   console.log("[SMTP_WORKER] Worker is ready");
 });
+
+const gracefulShutdown = async (signal: string) => {
+  console.log(`Received ${signal}, closing server...`);
+  await worker.close();
+  process.exit(0);
+}
+
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on("uncaughtException", function (err) {
+  Debug.error(err, "Uncaught exception");
+});
+process.on("unhandledRejection", (reason, promise) => {
+  Debug.error({ promise, reason }, "Unhandled Rejection at: Promise");
+});
+
+const ThrowError = () => {
+  throw new Error("This is a test error");
+}

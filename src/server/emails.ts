@@ -268,6 +268,7 @@ class SMTPQueue extends BaseEmailQueue {
     await emailQueue.addBulk(jobs);
   }
 
+
   async addEmailToQueue(
     { email, campaignOrg, smtpCredentials }: AddSMTPRouteParamsType,
     prioritySlug: string = DefaultPrioritySlug,

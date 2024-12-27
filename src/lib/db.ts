@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { isDevelopment } from "./utils";
+import { Debug, isDevelopment } from "./utils";
 
 const { Pool } = pg;
 dotenv.config();
@@ -20,7 +20,7 @@ let pool: pg.Pool | undefined;
 
 export function getPool() {
   if (!pool) {
-    console.log("Creating new pool");
+    Debug.log("Creating a new database pool");
     pool = new Pool({
       connectionString: process.env.DATABASE_URL,
       ssl: sslOptions,
@@ -41,7 +41,7 @@ export const query = async (text: string, params: (string | number)[]) => {
     const result = await activePool.query(text, params);
     return result;
   } catch (error) {
-    console.error("Query execution failed:", error);
+    Debug.error("Query execution failed:", error);
     throw error;
   } finally {
     activePool.release(); // Always release the client
@@ -51,10 +51,10 @@ export const query = async (text: string, params: (string | number)[]) => {
 export default pool;
 
 process.on("SIGINT", async () => {
-  if (pool) {
-    console.log("Closing database pool...");
+  if (pool && pool.ended === false) {
+    Debug.log("Closing database pool...");
     await pool.end();
-    console.log("Database pool closed");
+    Debug.log("Database pool closed");
   }
   process.exit(0);
 });

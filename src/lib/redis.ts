@@ -1,5 +1,6 @@
 import { Redis } from "ioredis";
 import dotenv from "dotenv";
+import { Debug } from "./utils";
 
 dotenv.config();
 
@@ -15,18 +16,21 @@ export async function getRedisConnection() {
     connection = new Redis(process.env.REDIS_URL, {
       maxRetriesPerRequest: MAX_REDIS_RETRIES,
       lazyConnect: true,
+      retryStrategy: function (times: number) {
+        return Math.max(Math.min(Math.exp(times), 20000), 1000);
+     },
     });
 
     connection.on("error", (err) => {
-      console.error("Redis error", err);
+      Debug.error("Redis error", err);
     });
 
     connection.on("ready", () => {
-      console.log("Redis is connected successfully");
+      Debug.log("Redis is connected successfully");
     });
 
     connection.on("close", () => {
-      console.log("Redis is disconnected");
+      Debug.log("Redis is disconnected");
     });
   }
   return connection;
