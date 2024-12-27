@@ -13,7 +13,6 @@ import { Email } from "../server/types/emailQueue";
 const handleJob = async (job: Job) => {
   console.log("[SMTP_WORKER] Job Started with jobID", job.id);
   const data = job.data;
-  ThrowError()
 
   try {
     const validatedData = AddSMTPRouteParamsSchema.safeParse(data);
@@ -186,7 +185,3 @@ process.on("uncaughtException", function (err) {
 process.on("unhandledRejection", (reason, promise) => {
   Debug.error({ promise, reason }, "Unhandled Rejection at: Promise");
 });
-
-const ThrowError = () => {
-  throw new Error("This is a test error");
-}
