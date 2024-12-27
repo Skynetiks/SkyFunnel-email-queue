@@ -14,7 +14,7 @@ const sslOptions = !isDevelopment
   ? {
       ca: fs.readFileSync(path.resolve(__dirname, "./certs/us-east-1-bundle.pem")),
     }
-  : undefined;
+  : { rejectUnauthorized: false };
 
 let pool: pg.Pool | undefined;
 
