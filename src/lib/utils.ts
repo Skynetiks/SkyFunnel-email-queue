@@ -1,3 +1,5 @@
+import dotenv from "dotenv";
+dotenv.config()
 /**
  * Checks if the given string is a numeric string. and can be safely parsed as a number
  * @param str - The string to check is is numeric
