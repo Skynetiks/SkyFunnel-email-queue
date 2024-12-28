@@ -65,7 +65,7 @@ class BaseEmailQueue {
       if (state === "delayed") {
         job.changeDelay(delayInSeconds * 1000);
       } else {
-        job.moveToDelayed(delayedTimestamp);
+        job.moveToDelayed(delayedTimestamp, undefined);
       }
     });
 
