@@ -135,7 +135,7 @@ async function sendEmailAndUpdateStatus(
 
 const redisUrl = process.env.REDIS_URL;
 const worker = new Worker(SMTP_EMAIL_QUEUE_KEY, (job) => handleJob(job) , {
-  concurrency: QUEUE_CONFIG.concurrency,
+  concurrency: 5,
   connection: {
     url: redisUrl,
     retryStrategy: (attempts) => Math.min(attempts * 100, 3000),

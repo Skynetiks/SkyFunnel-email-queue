@@ -140,6 +140,8 @@ class NodemailerTransporter {
         auth: { user, pass },
         debug: process.env.NODE_ENV === "development" && process.env.SMTP_DEBUG !== "false",
         logger: process.env.NODE_ENV === "development" && process.env.SMTP_DEBUG !== "false",
+        maxConnections: 5, // Limit connections
+        maxMessages: 100,
       });
 
       this.transporters.set(key, { transporter, lastUsed: Date.now() });
@@ -175,7 +177,7 @@ class NodemailerTransporter {
   }
 
   private isTransporterInactive(lastUsed: number) {
-    const idleTimeout = NodemailerTransporter.cleanUpAfterMs; 
+    const idleTimeout = NodemailerTransporter.cleanUpAfterMs;
     return Date.now() - lastUsed > idleTimeout;
   }
 
@@ -192,7 +194,7 @@ class NodemailerTransporter {
           console.error(`Error cleaning up transporter ${key}:`, error);
         }
       }
-    }, NodemailerTransporter.cleanUpCheckIntervalMs); 
+    }, NodemailerTransporter.cleanUpCheckIntervalMs);
   }
 
   async shutdown() {
@@ -200,7 +202,7 @@ class NodemailerTransporter {
       clearInterval(this.cleanupInterval);
       this.cleanupInterval = null;
     }
-  
+
     const closePromises = Array.from(this.transporters.entries()).map(async ([key, { transporter }]) => {
       try {
         await transporter.close();
@@ -209,11 +211,10 @@ class NodemailerTransporter {
         Debug.error(`Failed to close transporter for ${key}:`, error);
       }
     });
-  
+
     await Promise.all(closePromises);
   }
 }
-
 
 async function sendNodemailerEmailRaw({ host, port, secure, user, pass }: Credentials, options: Options) {
   const instance = NodemailerTransporter.getInstance();

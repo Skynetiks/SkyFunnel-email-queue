@@ -60,7 +60,7 @@ class BaseEmailQueue {
     const delayedTimestamp = new Date(Date.now() + delayInSeconds * 1000).getTime();
     const jobsDelayPromise = jobs.map(async (job) => {
       const state = await job.getState();
-      if (["waiting", "paused", "delayed"].includes(state)) return;
+      if (["waiting", "paused"].includes(state)) return;
 
       if (state === "delayed") {
         job.changeDelay(delayInSeconds * 1000);
