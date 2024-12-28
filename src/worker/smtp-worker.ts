@@ -138,8 +138,10 @@ const worker = new Worker(SMTP_EMAIL_QUEUE_KEY, (job) => handleJob(job) , {
   concurrency: QUEUE_CONFIG.concurrency,
   connection: {
     url: redisUrl,
+    retryStrategy: (attempts) => Math.min(attempts * 100, 3000),
   },
   lockDuration: 30000,
+  lockRenewTime: 15000,
 });
 
 worker.on("failed", async (job) => {
