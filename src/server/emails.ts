@@ -54,10 +54,11 @@ class BaseEmailQueue {
    * @param delayInSeconds 
    * @returns 
    */
-  async delayRemainingJobs(campaignId: string, delayInSeconds: number) {
-    const jobs = await this.getJobsByJobIdKeyword(campaignId, ["delayed", "paused", "waiting"]);
+  async delayRemainingJobs(currentJob: Job, delayInSeconds: number) {
+    const comapignId = currentJob.data.email.emailCampaignId;
+    const jobs = await this.getJobsByJobIdKeyword(comapignId, ["delayed", "paused", "waiting"]);
     if (!jobs.length) {
-      console.log(`No jobs found for campaignId: ${campaignId}`);
+      console.log(`No jobs found for campaignId: ${comapignId}`);
       return 0;
     }
 
@@ -83,7 +84,7 @@ class BaseEmailQueue {
     });
 
     //add new job with the currents job data and delay
-    const { email, campaignOrg, smtpCredentials } = jobs[0].data;
+    const { email, campaignOrg, smtpCredentials } = currentJob.data;
     try {
       await smtpQueue.addEmailToQueue(
         { email, campaignOrg, smtpCredentials },
