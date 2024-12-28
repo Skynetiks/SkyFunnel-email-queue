@@ -28,7 +28,7 @@ const handleJob = async (job: Job) => {
 
       try {
         const queue = smtpQueue.getQueue();
-        const newJobId = getDelayedJobId(job.id || generateJobId(email.emailCampaignId, email.id, "SES"));
+        const newJobId = getDelayedJobId(job.id || generateJobId(email.emailCampaignId, email.id, "SMTP"));
         await queue.add(email.id, data, { ...job.opts, delay: DELAY_TIME, jobId: newJobId });
         console.log(`[SMTP_WORKER] New delayed job added to queue with a delay of ${DELAY_TIME} ms`);
       } catch (moveError) {
@@ -135,7 +135,7 @@ async function sendEmailAndUpdateStatus(
 
 const redisUrl = process.env.REDIS_URL;
 const worker = new Worker(SMTP_EMAIL_QUEUE_KEY, (job) => handleJob(job) , {
-  concurrency: 5,
+  concurrency: QUEUE_CONFIG.concurrency,
   connection: {
     url: redisUrl,
     retryStrategy: (attempts) => Math.min(attempts * 100, 3000),

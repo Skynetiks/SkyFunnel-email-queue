@@ -48,6 +48,12 @@ class BaseEmailQueue {
     return this.emailQueue;
   }
 
+  /**
+   * Delays remaing jobs and create a new job witht he delay for the existing job
+   * @param campaignId 
+   * @param delayInSeconds 
+   * @returns 
+   */
   async delayRemainingJobs(campaignId: string, delayInSeconds: number) {
     const jobs = await this.getJobsByJobIdKeyword(campaignId, ["delayed", "paused", "waiting"]);
     if (!jobs.length) {
@@ -75,6 +81,19 @@ class BaseEmailQueue {
     failedJobs.forEach((result, index) => {
       console.error(`Failed to delay job ${jobs[index]?.id}:`, result.reason);
     });
+
+    //add new job with the currents job data and delay
+    const { email, campaignOrg, smtpCredentials } = jobs[0].data;
+    try {
+      await smtpQueue.addEmailToQueue(
+        { email, campaignOrg, smtpCredentials },
+        "default",
+        delayInSeconds
+      );
+      console.log(`[SMTP_WORKER] New delayed job added to queue with a delay of ${delayInSeconds * 1000} ms`);
+    } catch (moveError) {
+      console.error("[SMTP_WORKER] Failed to add job to queue", moveError);
+    }
 
     console.timeEnd("Delay remaining jobs");
 
@@ -272,6 +291,7 @@ class SMTPQueue extends BaseEmailQueue {
   async addEmailToQueue(
     { email, campaignOrg, smtpCredentials }: AddSMTPRouteParamsType,
     prioritySlug: string = DefaultPrioritySlug,
+    delayInSeconds: number = 0,
   ) {
     const emailQueue = this.emailQueue;
     if (!emailQueue) {
@@ -283,7 +303,14 @@ class SMTPQueue extends BaseEmailQueue {
     const jobId = generateJobId(email.emailCampaignId, email.id, "SMTP");
 
     const data = { campaignOrg, email, smtpCredentials } satisfies AddSMTPRouteParamsType;
-    await emailQueue.add(email.id, data, { ...DEFAULT_JOB_OPTIONS, jobId: jobId, priority: priorityNumber });
+
+    const jobOptions = {
+      ...DEFAULT_JOB_OPTIONS,
+      jobId: jobId,
+      priority: priorityNumber,
+      delay: delayInSeconds * 1000, // Convert delay to milliseconds
+    };
+    await emailQueue.add(email.id, data, jobOptions);
   }
 }
 
