@@ -87,7 +87,7 @@ async function sendEmailAndUpdateStatus(email: Email, campaignOrg: { name: strin
     ]);
     await query(
       'INSERT INTO "EmailEvent" ("id", "emailId", "eventType", "timestamp", "campaignId") VALUES (uuid_generate_v4(), $1, $2, $3, $4)',
-      [email.id, "BOUNCE", new Date().toISOString(), email.emailCampaignId],
+      [email.id, "SUPPRESS", new Date().toISOString(), email.emailCampaignId],
     );
     console.log("[SKYFUNNEL_WORKER] Suppressed email " + email.id);
     return;
