@@ -81,10 +81,10 @@ async function sendEmailAndUpdateStatus(
     await query('UPDATE "EmailCampaign" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1', [
       email.emailCampaignId,
     ]);
-    Debug.devLog("ADDING BOUNCE EVENT FOR EMAIL ID: ", email.id);
+    Debug.devLog("ADDING SUPPRESS EVENT FOR EMAIL ID: ", email.id);
     await query(
       'INSERT INTO "EmailEvent" ("id", "emailId", "eventType", "timestamp", "campaignId") VALUES (uuid_generate_v4(), $1, $2, $3, $4)',
-      [email.id, "BOUNCE", new Date().toISOString(), email.emailCampaignId],
+      [email.id, "SUPPRESS", new Date().toISOString(), email.emailCampaignId],
     );
     console.log("Suppressed email " + email.id);
     return;
@@ -123,7 +123,7 @@ async function sendEmailAndUpdateStatus(
 
       await Promise.all([updateEmailResult, updateCampaignResult, addDeliveryEventResult]);
     } else {
-      console.error("[SMTP_WORKER] Error While Sending Emails via Smtp for",email.leadEmail, emailSent ? emailSent.response : "");
+      console.error("[SMTP_WORKER] Error While Sending Emails via Smtp for", email.leadEmail, emailSent ? emailSent.response : "");
       throw new AppError("INTERNAL_SERVER_ERROR", "Email not sent by SMTP");
     }
   } catch (error) {
@@ -134,7 +134,7 @@ async function sendEmailAndUpdateStatus(
 
 
 const redisUrl = process.env.REDIS_URL;
-const worker = new Worker(SMTP_EMAIL_QUEUE_KEY, (job) => handleJob(job) , {
+const worker = new Worker(SMTP_EMAIL_QUEUE_KEY, (job) => handleJob(job), {
   concurrency: QUEUE_CONFIG.concurrency,
   connection: {
     url: redisUrl,
