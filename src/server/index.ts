@@ -1,19 +1,22 @@
-import { skyfunnelSesQueue, smtpQueue } from "./emails";
-import express, { NextFunction, Request, Response } from "express";
-import dotenv from "dotenv";
-import morgan from "morgan";
 import compression from "compression";
-import authMiddleware from "./middlewares/auth.js";
+import dotenv from "dotenv";
+import express, { NextFunction, Request, Response } from "express";
 import helmet from "helmet";
-import { AppError, expressErrorHandler } from "../lib/errorHandler.js";
-import { DefaultPrioritySlug } from "../config.js";
-import { AdminWorkerEmailSchema } from "../admin-worker/types/email.js";
+import morgan from "morgan";
 import { z } from "zod";
-import { addAdminEmailsToQueue } from "./admin-email.js";
-import { AddBulkSMTPRouteParamsSchema, AddSMTPRouteParamsSchema } from "./types/smtpQueue.js";
-import { AddBulkSkyfunnelSesRouteParamsSchema, AddSESEmailRouteParamsSchema } from "./types/emailQueue.js";
-import { getRedisConnection } from "../lib/redis";
+import { AdminWorkerEmailSchema } from "../admin-worker/types/email.js";
+import { DefaultPrioritySlug } from "../config.js";
 import { query } from "../lib/db";
+import { AppError, expressErrorHandler } from "../lib/errorHandler.js";
+import { getRedisConnection } from "../lib/redis";
+import { sendSMTPEmail } from "../lib/smtp";
+import { addAdminEmailsToQueue } from "./admin-email.js";
+import { skyfunnelSesQueue, smtpQueue } from "./emails";
+import authMiddleware from "./middlewares/auth.js";
+import { sesInputSchema, smtpInputSchema } from "./types/email";
+import { AddBulkSkyfunnelSesRouteParamsSchema, AddSESEmailRouteParamsSchema } from "./types/emailQueue.js";
+import { AddBulkSMTPRouteParamsSchema, AddSMTPRouteParamsSchema } from "./types/smtpQueue.js";
+import { sendEmailSES } from "../lib/aws.js";
 
 dotenv.config();
 
@@ -108,16 +111,21 @@ app.post("/smtp/add-email", async (req, res, next) => {
 
 app.post("/smtp/send-email", async (req, res, next) => {
   try {
-    const { success, data: emailData, error: ZodError } = AddSMTPRouteParamsSchema.safeParse(req.body);
+    const { success, data, error: ZodError } = smtpInputSchema.safeParse(req.body);
 
     if (!success) {
       throw new AppError("BAD_REQUEST", ZodError.errors[0].path[0] + ": " + ZodError.errors[0].message);
     }
 
-    // TODO: Send Email
+    const { smtpCredentials } = data;
+    const { emailBody, receiverEmail, subject, senderEmail, replyToEmail, senderName } = data.emailDetails;
+
+    await sendSMTPEmail({ body: emailBody, recipient: receiverEmail, senderEmail, replyToEmail, subject, senderName }, smtpCredentials);
+
     res.status(200).json({
       success: true,
-      message: "Email added to queue",
+      message: "Email sent",
+      sent: true
     });
   } catch (error) {
     next(error);
@@ -238,16 +246,19 @@ app.post("/ses/add-email", async (req, res, next) => {
 
 app.post("/ses/send-email", async (req, res, next) => {
   try {
-    const { success, data: emailData, error: ZodError } = AddSESEmailRouteParamsSchema.safeParse(req.body);
+    const { success, data, error: ZodError } = sesInputSchema.safeParse(req.body);
 
     if (!success) {
       throw new AppError("BAD_REQUEST", ZodError.errors[0].path[0] + ": " + ZodError.errors[0].message);
     }
 
-    // TODO: Send Email
+    const { emailBody, receiverEmail, senderEmail, subject, replyToEmail, senderName } = data.emailDetails;
+    await sendEmailSES({ body: emailBody, recipient: receiverEmail, senderEmail, senderName, subject, replyToEmail });
+
     res.status(200).json({
       success: true,
-      message: "Email added to queue",
+      message: "Email sent",
+      sent: true
     });
   } catch (error) {
     next(error);
