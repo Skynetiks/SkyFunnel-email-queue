@@ -2,7 +2,7 @@ import { z } from "zod";
 import { EmailSchema } from "./emailQueue";
 import { BulkJobOptions } from "bullmq";
 
-const SMTPCredentialsSchema = z.object({
+export const SMTPCredentialsSchema = z.object({
   host: z.string(),
   port: z.number(),
   user: z.string(),
