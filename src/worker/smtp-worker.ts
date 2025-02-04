@@ -116,12 +116,17 @@ async function sendEmailAndUpdateStatus(
         [email.emailCampaignId],
       );
 
+      const updateOrganizationResult = query(
+        'UPDATE "Organization" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1',
+        [campaignOrg.id],
+      );
+
       const addDeliveryEventResult = query(
         'INSERT INTO "EmailEvent" ("id", "emailId", "eventType", "timestamp", "campaignId") VALUES (uuid_generate_v4(), $1, $2, $3, $4)',
         [email.id, "DELIVERY", new Date().toISOString(), email.emailCampaignId],
       );
 
-      await Promise.all([updateEmailResult, updateCampaignResult, addDeliveryEventResult]);
+      await Promise.all([updateEmailResult, updateCampaignResult, addDeliveryEventResult, updateOrganizationResult]);
     } else {
       console.error("[SMTP_WORKER] Error While Sending Emails via Smtp for", email.leadEmail, emailSent ? emailSent.response : "");
       throw new AppError("INTERNAL_SERVER_ERROR", "Email not sent by SMTP");
