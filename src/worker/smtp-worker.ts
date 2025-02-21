@@ -3,7 +3,7 @@ import { Job, Worker } from "bullmq";
 import { QUEUE_CONFIG, SMTP_EMAIL_QUEUE_KEY } from "../config";
 import { query } from "../lib/db";
 import { AppError, errorHandler } from "../lib/errorHandler";
-import { getCampaignById, getLeadById, getSuppressedEmail, getUserById } from "../db/emailQueries";
+import { getCampaignById, getLeadById, getOrganizationById, getOrganizationSubscription, getSuppressedEmail, getUserById } from "../db/emailQueries";
 import { getEmailBody } from "../lib/email";
 import { Debug, generateJobId, getDelayedJobId } from "../lib/utils";
 import { AddSMTPRouteParamsSchema, AddSMTPRouteParamsType, SMTPCredentials } from "../server/types/smtpQueue";
@@ -53,8 +53,13 @@ async function sendEmailAndUpdateStatus(
   const leadResultsPromise = getLeadById(email.leadId);
   const userResultsPromise = getUserById(email.senderId);
   const campaignPromise = getCampaignById(email.emailCampaignId);
-
+  
   const [lead, user, campaign] = await Promise.all([leadResultsPromise, userResultsPromise, campaignPromise]);
+  
+  const organizationId = user.organizationId;
+  const organization = await getOrganizationById(organizationId);
+
+  const organizationSubscription = await getOrganizationSubscription(organization.orgSubscriptionId);
 
   if (!user) throw new AppError("NOT_FOUND", "User not found");
   if (!lead) throw new AppError("NOT_FOUND", "Lead not found");
@@ -72,6 +77,7 @@ async function sendEmailAndUpdateStatus(
     leadCompanyName: email.leadCompanyName || "",
     leadId: lead.id,
     organizationName: campaignOrg.name,
+    subscriptionType: organizationSubscription.leadManagementModuleType
   });
 
   if (suppressedResults) {
