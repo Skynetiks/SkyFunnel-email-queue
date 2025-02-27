@@ -84,7 +84,6 @@ export const errorHandler = (err: unknown, shouldThrowAlways = false) => {
     if (err.level === "HIGH" || shouldThrowAlways || !err.isOperational) {
       throw err;
     }
-    
   } else if (err instanceof Error) {
     // Unexpected error
     Debug.error(`[ERROR]: [UNEXPECTED] - ${err.message}`);

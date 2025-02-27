@@ -1,6 +1,21 @@
 import { BulkJobOptions } from "bullmq";
 import z from "zod";
 
+const isValidTimeFormatRefine = (
+  val: string | null,
+  ctx: z.RefinementCtx,
+  config: { path: string[]; message: string },
+) => {
+  if (!val) return true;
+  if (val.split(":").length !== 2) {
+    return ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: config.message,
+      path: config.path,
+    });
+  }
+};
+
 export const EmailSchema = z.object({
   id: z.string(),
   leadId: z.string(),
@@ -9,6 +24,26 @@ export const EmailSchema = z.object({
   leadLastName: z.string().optional().nullable(),
   leadEmail: z.string(),
   senderId: z.string(),
+
+  startTimeInUTC: z
+    .string()
+    .nullable()
+    .superRefine((val, ctx) =>
+      isValidTimeFormatRefine(val, ctx, {
+        path: ["startTimeInUTC"],
+        message: "Invalid start time format must be like HH:mm",
+      }),
+    ),
+
+  endTimeInUTC: z
+    .string()
+    .nullable()
+    .superRefine((val, ctx) =>
+      isValidTimeFormatRefine(val, ctx, {
+        path: ["endTimeInUTC"],
+        message: "Invalid end time format must be like HH:mm",
+      }),
+    ),
 
   isSentMessage: z.boolean(),
   isRead: z.boolean(),

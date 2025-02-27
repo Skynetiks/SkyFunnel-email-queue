@@ -5,7 +5,12 @@
     "datetime",
     "firstname",
     "lastname",
+    "luxon",
+    "sadd",
+    "sismember",
     "Skyfunnel",
+    "smembers",
+    "srem",
     "tseslint"
   ]
 }

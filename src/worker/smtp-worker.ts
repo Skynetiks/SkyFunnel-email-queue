@@ -5,7 +5,7 @@ import { query } from "../lib/db";
 import { AppError, errorHandler } from "../lib/errorHandler";
 import { getCampaignById, getLeadById, getSuppressedEmail, getUserById } from "../db/emailQueries";
 import { getEmailBody } from "../lib/email";
-import { Debug, generateJobId, getDelayedJobId } from "../lib/utils";
+import { Debug, generateJobId, getDelayedJobId, isWithinPeriod } from "../lib/utils";
 import { AddSMTPRouteParamsSchema, AddSMTPRouteParamsType, SMTPCredentials } from "../server/types/smtpQueue";
 import { sendSMTPEmail, smtpErrorHandler } from "../lib/smtp";
 import { Email } from "../server/types/emailQueue";
@@ -22,9 +22,13 @@ const handleJob = async (job: Job) => {
 
     const { email, campaignOrg, smtpCredentials } = validatedData.data;
     const isPaused = await smtpQueue.isCampaignPaused(email.emailCampaignId);
+    const isWithinPeriodValue = isWithinPeriod(email.startTimeInUTC, email.endTimeInUTC);
     Debug.devLog(isPaused ? "[SMTP_WORKER] Campaign is paused" : "[SMTP_WORKER] Campaign is not paused");
-    if (isPaused) {
+    if (isPaused || !isWithinPeriodValue) {
+      // TODO: calculate delay time based on the next start time
       const DELAY_TIME = 1000 * QUEUE_CONFIG.delayAfterPauseInSeconds;
+
+      if (!isWithinPeriodValue) Debug.devLog("[SMTP_WORKER] Delaying the campaign because it is not within the period");
 
       try {
         const queue = smtpQueue.getQueue();
@@ -76,7 +80,7 @@ async function sendEmailAndUpdateStatus(
 
   if (suppressedResults) {
     Debug.devLog("UPDATING EMAIL STATUS TO SUPPRESS FOR EMAIL ID: ", email.id);
-    await query('UPDATE "Email" SET status = $1 WHERE id = $2', ["SUPPRESS", email.id])
+    await query('UPDATE "Email" SET status = $1 WHERE id = $2', ["SUPPRESS", email.id]);
     Debug.devLog("INCREMENTING EMAIL_CAMPAIGN sentEmailCount: ", email.id);
     await query('UPDATE "EmailCampaign" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1', [
       email.emailCampaignId,
@@ -104,7 +108,12 @@ async function sendEmailAndUpdateStatus(
     );
 
     if (emailSent && emailSent.accepted && emailSent.messageId) {
-      Debug.devLog("UPDATING STATUS FOR THE Email WITH MESSAGE_ID:", emailSent.messageId, "AND RECIPIENT:", email.leadEmail);
+      Debug.devLog(
+        "UPDATING STATUS FOR THE Email WITH MESSAGE_ID:",
+        emailSent.messageId,
+        "AND RECIPIENT:",
+        email.leadEmail,
+      );
       const updateEmailResult = query('UPDATE "Email" SET status = $1, "messageId" = $2 WHERE id = $3', [
         "SENT",
         emailSent.messageId,
@@ -123,7 +132,11 @@ async function sendEmailAndUpdateStatus(
 
       await Promise.all([updateEmailResult, updateCampaignResult, addDeliveryEventResult]);
     } else {
-      console.error("[SMTP_WORKER] Error While Sending Emails via Smtp for",email.leadEmail, emailSent ? emailSent.response : "");
+      console.error(
+        "[SMTP_WORKER] Error While Sending Emails via Smtp for",
+        email.leadEmail,
+        emailSent ? emailSent.response : "",
+      );
       throw new AppError("INTERNAL_SERVER_ERROR", "Email not sent by SMTP");
     }
   } catch (error) {
@@ -131,10 +144,8 @@ async function sendEmailAndUpdateStatus(
   }
 }
 
-
-
 const redisUrl = process.env.REDIS_URL;
-const worker = new Worker(SMTP_EMAIL_QUEUE_KEY, (job) => handleJob(job) , {
+const worker = new Worker(SMTP_EMAIL_QUEUE_KEY, (job) => handleJob(job), {
   concurrency: QUEUE_CONFIG.concurrency,
   connection: {
     url: redisUrl,
@@ -148,8 +159,7 @@ worker.on("failed", async (job) => {
   if (job && "id" in job.data.email) {
     console.log("Updating email status to ERROR");
     await query('UPDATE "Email" SET status = $1 WHERE id = $2', ["ERROR", job.data.email.id]);
-  }
-  else {
+  } else {
     Debug.devLog("Failed to update email status to ERROR as there was not email id in the job data", job);
   }
 
@@ -162,11 +172,11 @@ worker.on("completed", () => {
 
 worker.on("error", (error) => {
   Debug.devLog("[SMTP_WORKER] Error in SMTP worker", error);
-})
+});
 
 worker.on("closing", () => {
   Debug.devLog("[SMTP_WORKER] SMTP worker is closing");
-})
+});
 
 worker.on("ready", () => {
   console.log("[SMTP_WORKER] Worker is ready");
@@ -176,11 +186,11 @@ const gracefulShutdown = async (signal: string) => {
   console.log(`Received ${signal}, closing server...`);
   await worker.close();
   process.exit(0);
-}
+};
 
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("uncaughtException", function (err) {
   Debug.error(err, "Uncaught exception");
 });

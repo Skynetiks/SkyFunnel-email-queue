@@ -49,16 +49,16 @@ class BaseEmailQueue {
   }
 
   /**
-   * Delays remaing jobs and create a new job witht he delay for the existing job
-   * @param campaignId 
-   * @param delayInSeconds 
-   * @returns 
+   * Delays remaining jobs and create a new job with the delay for the existing job
+   * @param campaignId
+   * @param delayInSeconds
+   * @returns
    */
   async delayRemainingJobs(currentJob: Job, delayInSeconds: number) {
-    const comapignId = currentJob.data.email.emailCampaignId;
-    const jobs = await this.getJobsByJobIdKeyword(comapignId, ["delayed", "paused", "waiting"]);
+    const campaignId = currentJob.data.email.emailCampaignId;
+    const jobs = await this.getJobsByJobIdKeyword(campaignId, ["delayed", "paused", "waiting"]);
     if (!jobs.length) {
-      console.log(`No jobs found for campaignId: ${comapignId}`);
+      console.log(`No jobs found for campaignId: ${campaignId}`);
       return 0;
     }
 
@@ -86,11 +86,7 @@ class BaseEmailQueue {
     //add new job with the currents job data and delay
     const { email, campaignOrg, smtpCredentials } = currentJob.data;
     try {
-      await smtpQueue.addEmailToQueue(
-        { email, campaignOrg, smtpCredentials },
-        "default",
-        delayInSeconds
-      );
+      await smtpQueue.addEmailToQueue({ email, campaignOrg, smtpCredentials }, "default", delayInSeconds);
       console.log(`[SMTP_WORKER] New delayed job added to queue with a delay of ${delayInSeconds * 1000} ms`);
     } catch (moveError) {
       console.error("[SMTP_WORKER] Failed to add job to queue", moveError);
@@ -287,7 +283,6 @@ class SMTPQueue extends BaseEmailQueue {
 
     await emailQueue.addBulk(jobs);
   }
-
 
   async addEmailToQueue(
     { email, campaignOrg, smtpCredentials }: AddSMTPRouteParamsType,

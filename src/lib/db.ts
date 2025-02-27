@@ -16,7 +16,6 @@ const sslOptions = !isDevelopment
     }
   : { rejectUnauthorized: false };
 
-console.log(sslOptions)
 let pool: pg.Pool | undefined;
 
 export function getPool() {

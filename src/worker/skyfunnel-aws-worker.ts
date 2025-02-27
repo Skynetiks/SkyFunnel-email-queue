@@ -7,7 +7,7 @@ import { AppError, errorHandler } from "../lib/errorHandler";
 import { getCampaignById, getLeadById, getOrganizationById, getSuppressedEmail, getUserById } from "../db/emailQueries";
 import { getEmailBody } from "../lib/email";
 import { sendEmailSES } from "../lib/aws";
-import { generateJobId, getDelayedJobId } from "../lib/utils";
+import { generateJobId, getDelayedJobId, isWithinPeriod } from "../lib/utils";
 
 const handleJob = async (job: Job) => {
   console.log("[SKYFUNNEL_WORKER] Job Started with jobID", job.id);
@@ -21,7 +21,7 @@ const handleJob = async (job: Job) => {
     const { email, campaignOrg } = validatedData.data;
     const isPaused = await skyfunnelSesQueue.isCampaignPaused(email.emailCampaignId);
     console.log("isPaused", isPaused);
-    if (isPaused) {
+    if (isPaused || !isWithinPeriod(email.startTimeInUTC, email.endTimeInUTC)) {
       const DELAY_TIME = 1000 * QUEUE_CONFIG.delayAfterPauseInSeconds;
 
       try {
@@ -42,14 +42,18 @@ const handleJob = async (job: Job) => {
   }
 };
 
-
 async function sendEmailAndUpdateStatus(email: Email, campaignOrg: { name: string; id: string }) {
   const leadResultsPromise = getLeadById(email.leadId);
   const userResultsPromise = getUserById(email.senderId);
   const campaignPromise = getCampaignById(email.emailCampaignId);
   const organizationPromise = getOrganizationById(campaignOrg.id);
 
-  const [lead, user, campaign, organization] = await Promise.all([leadResultsPromise, userResultsPromise, campaignPromise, organizationPromise]);
+  const [lead, user, campaign, organization] = await Promise.all([
+    leadResultsPromise,
+    userResultsPromise,
+    campaignPromise,
+    organizationPromise,
+  ]);
 
   if (!user) throw new AppError("NOT_FOUND", "User not found");
   if (!lead) throw new AppError("NOT_FOUND", "Lead not found");
@@ -92,7 +96,6 @@ async function sendEmailAndUpdateStatus(email: Email, campaignOrg: { name: strin
     console.log("[SKYFUNNEL_WORKER] Suppressed email " + email.id);
     return;
   }
-
 
   const emailSent = await sendEmailSES({
     senderEmail: campaign.senderEmail,
