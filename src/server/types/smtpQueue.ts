@@ -2,7 +2,7 @@ import { z } from "zod";
 import { EmailSchema } from "./emailQueue";
 import { BulkJobOptions } from "bullmq";
 
-const SMTPCredentialsSchema = z.object({
+export const SMTPCredentialsSchema = z.object({
   host: z.string(),
   port: z.number(),
   user: z.string(),
@@ -15,6 +15,7 @@ export const AddBulkSMTPRouteParamsSchema = z.object({
     id: z.string(),
     name: z.string(),
   }),
+  batchDelay: z.number(),
   interval: z.number(),
   priority: z.string().optional(),
   smtpCredentials: SMTPCredentialsSchema,

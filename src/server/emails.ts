@@ -198,7 +198,7 @@ class SkyFunnelSESQueue extends BaseEmailQueue {
   }
 
   async addBulkEmailsToQueue(
-    { campaignOrg, emails, interval }: AddBulkSkyfunnelSesRouteParamType,
+    { campaignOrg, emails, interval, batchDelay }: AddBulkSkyfunnelSesRouteParamType,
     prioritySlug: string = DefaultPrioritySlug,
   ) {
     if (!emails.length || !emails[0]?.emailCampaignId) {
@@ -213,7 +213,7 @@ class SkyFunnelSESQueue extends BaseEmailQueue {
     const priorityNumber = getPriority(prioritySlug);
 
     const jobs = emails.map((email, index) => {
-      const delay = index * interval * 1000;
+      const delay = batchDelay + (index * interval * 1000);
       const jobId = generateJobId(email.emailCampaignId, email.id, "SES");
 
       return {
@@ -256,7 +256,7 @@ class SMTPQueue extends BaseEmailQueue {
   }
 
   async addBulkEmailsToQueue(
-    { campaignOrg, emails, interval, smtpCredentials }: AddBulkSMTPRouteParamType,
+    { campaignOrg, emails, interval, smtpCredentials, batchDelay }: AddBulkSMTPRouteParamType,
     prioritySlug: string = DefaultPrioritySlug,
   ) {
     if (!emails.length || !emails[0]?.emailCampaignId) {
@@ -271,7 +271,7 @@ class SMTPQueue extends BaseEmailQueue {
     const priorityNumber = getPriority(prioritySlug);
 
     const jobs = emails.map((email, index) => {
-      const delay = index * interval * 1000;
+      const delay = batchDelay + (index * interval * 1000);
       const jobId = generateJobId(email.emailCampaignId, email.id, "SMTP");
 
       return {

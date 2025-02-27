@@ -3,7 +3,14 @@ import { Job, Worker } from "bullmq";
 import { QUEUE_CONFIG, SMTP_EMAIL_QUEUE_KEY } from "../config";
 import { query } from "../lib/db";
 import { AppError, errorHandler } from "../lib/errorHandler";
-import { getCampaignById, getLeadById, getSuppressedEmail, getUserById } from "../db/emailQueries";
+import {
+  getCampaignById,
+  getLeadById,
+  getOrganizationById,
+  getOrganizationSubscription,
+  getSuppressedEmail,
+  getUserById,
+} from "../db/emailQueries";
 import { getEmailBody } from "../lib/email";
 import { Debug, generateJobId, getDelayedJobId, isWithinPeriod } from "../lib/utils";
 import { AddSMTPRouteParamsSchema, AddSMTPRouteParamsType, SMTPCredentials } from "../server/types/smtpQueue";
@@ -60,6 +67,11 @@ async function sendEmailAndUpdateStatus(
 
   const [lead, user, campaign] = await Promise.all([leadResultsPromise, userResultsPromise, campaignPromise]);
 
+  const organizationId = user.organizationId;
+  const organization = await getOrganizationById(organizationId);
+
+  const organizationSubscription = await getOrganizationSubscription(organization.orgSubscriptionId);
+
   if (!user) throw new AppError("NOT_FOUND", "User not found");
   if (!lead) throw new AppError("NOT_FOUND", "Lead not found");
   if (!campaign) throw new AppError("NOT_FOUND", "Campaign not found");
@@ -76,6 +88,7 @@ async function sendEmailAndUpdateStatus(
     leadCompanyName: email.leadCompanyName || "",
     leadId: lead.id,
     organizationName: campaignOrg.name,
+    subscriptionType: organizationSubscription.leadManagementModuleType,
   });
 
   if (suppressedResults) {
@@ -85,10 +98,10 @@ async function sendEmailAndUpdateStatus(
     await query('UPDATE "EmailCampaign" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1', [
       email.emailCampaignId,
     ]);
-    Debug.devLog("ADDING BOUNCE EVENT FOR EMAIL ID: ", email.id);
+    Debug.devLog("ADDING SUPPRESS EVENT FOR EMAIL ID: ", email.id);
     await query(
       'INSERT INTO "EmailEvent" ("id", "emailId", "eventType", "timestamp", "campaignId") VALUES (uuid_generate_v4(), $1, $2, $3, $4)',
-      [email.id, "BOUNCE", new Date().toISOString(), email.emailCampaignId],
+      [email.id, "SUPPRESS", new Date().toISOString(), email.emailCampaignId],
     );
     console.log("Suppressed email " + email.id);
     return;
@@ -125,12 +138,17 @@ async function sendEmailAndUpdateStatus(
         [email.emailCampaignId],
       );
 
+      const updateOrganizationResult = query(
+        'UPDATE "Organization" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1',
+        [campaignOrg.id],
+      );
+
       const addDeliveryEventResult = query(
         'INSERT INTO "EmailEvent" ("id", "emailId", "eventType", "timestamp", "campaignId") VALUES (uuid_generate_v4(), $1, $2, $3, $4)',
         [email.id, "DELIVERY", new Date().toISOString(), email.emailCampaignId],
       );
 
-      await Promise.all([updateEmailResult, updateCampaignResult, addDeliveryEventResult]);
+      await Promise.all([updateEmailResult, updateCampaignResult, addDeliveryEventResult, updateOrganizationResult]);
     } else {
       console.error(
         "[SMTP_WORKER] Error While Sending Emails via Smtp for",
