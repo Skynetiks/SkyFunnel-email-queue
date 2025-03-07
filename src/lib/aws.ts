@@ -35,6 +35,7 @@ type Props = {
   subject: string;
   body: string;
   replyToEmail?: string;
+  campaignId?: string;
 };
 
 const getSendEmailCommand = (
@@ -44,7 +45,9 @@ const getSendEmailCommand = (
   subject: string,
   body: string,
   replyToEmail?: string,
+  campaignId?: string,
 ) => {
+  const bodyWithCampaignId = campaignId ? `${body} thread::${campaignId}` : body;
   return new SendEmailCommand({
     Destination: {
       /* required */
@@ -65,10 +68,10 @@ const getSendEmailCommand = (
           Charset: "UTF-8",
           Data: body,
         },
-        // Text: {
-        // 	Charset: "UTF-8",
-        // 	Data: "TEXT_FORMAT_BODY",
-        // },
+        Text: {
+          Charset: "UTF-8",
+          Data: bodyWithCampaignId,
+        },
       },
       Subject: {
         Charset: "UTF-8",
@@ -88,7 +91,15 @@ const getSendEmailCommand = (
   });
 };
 
-export async function sendEmailSES({ senderEmail, senderName, recipient, subject, body, replyToEmail }: Props) {
+export async function sendEmailSES({
+  senderEmail,
+  senderName,
+  recipient,
+  subject,
+  body,
+  replyToEmail,
+  campaignId,
+}: Props) {
   if (!senderEmail || !senderName || !recipient || !subject || !body) {
     throw new AppError(
       "BAD_REQUEST",
@@ -96,7 +107,15 @@ export async function sendEmailSES({ senderEmail, senderName, recipient, subject
     );
   }
 
-  const sendEmailCommand = getSendEmailCommand(senderEmail, senderName, recipient, subject, body, replyToEmail);
+  const sendEmailCommand = getSendEmailCommand(
+    senderEmail,
+    senderName,
+    recipient,
+    subject,
+    body,
+    replyToEmail,
+    campaignId,
+  );
 
   try {
     const response = await sesClient.send(sendEmailCommand);

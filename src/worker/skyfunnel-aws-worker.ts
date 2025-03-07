@@ -4,7 +4,14 @@ import { QUEUE_CONFIG, SES_SKYFUNNEL_EMAIL_QUEUE_KEY } from "../config";
 import { query } from "../lib/db";
 import { AddSESEmailRouteParamsSchema, Email } from "../server/types/emailQueue";
 import { AppError, errorHandler } from "../lib/errorHandler";
-import { getCampaignById, getLeadById, getOrganizationById, getOrganizationSubscription, getSuppressedEmail, getUserById } from "../db/emailQueries";
+import {
+  getCampaignById,
+  getLeadById,
+  getOrganizationById,
+  getOrganizationSubscription,
+  getSuppressedEmail,
+  getUserById,
+} from "../db/emailQueries";
 import { getEmailBody } from "../lib/email";
 import { sendEmailSES } from "../lib/aws";
 import { generateJobId, getDelayedJobId, isWithinPeriod } from "../lib/utils";
@@ -83,7 +90,7 @@ async function sendEmailAndUpdateStatus(email: Email, campaignOrg: { name: strin
     leadCompanyName: email.leadCompanyName || "",
     leadId: lead.id,
     organizationName: campaignOrg.name,
-    subscriptionType: organizationSubscription.leadManagementModuleType
+    subscriptionType: organizationSubscription.leadManagementModuleType,
   });
 
   if (suppressedResults) {
@@ -106,6 +113,7 @@ async function sendEmailAndUpdateStatus(email: Email, campaignOrg: { name: strin
     recipient: lead.email,
     subject: campaign.subject,
     replyToEmail: campaign.replyToEmail,
+    campaignId: email.emailCampaignId,
   });
 
   if (emailSent && emailSent.success && emailSent.message?.MessageId) {

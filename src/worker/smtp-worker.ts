@@ -116,6 +116,7 @@ async function sendEmailAndUpdateStatus(
         recipient: email.leadEmail,
         subject: campaign.subject,
         replyToEmail: campaign.replyToEmail,
+        campaignId: email.emailCampaignId,
       },
       smtpCredentials,
     );

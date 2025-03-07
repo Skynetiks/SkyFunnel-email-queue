@@ -239,19 +239,20 @@ type Email = {
   subject: string;
   body: string;
   replyToEmail?: string;
+  campaignId?: string;
 };
 
 export async function sendSMTPEmail(email: Email, smtpCredentials: SMTPCredentials) {
-  const { body, senderEmail, senderName, recipient, subject, replyToEmail } = email;
+  const { body, senderEmail, senderName, recipient, subject, replyToEmail, campaignId } = email;
   const plainTextBody = convertHtmlToText(body);
-
+  const plainTextBodyWithCampaignId = campaignId ? `${plainTextBody} thread::${campaignId}` : plainTextBody;
   // Prepare the email options
   const mailOptions = {
     from: `${senderName} <${senderEmail}>`,
     sender: process.env.ADMIN_SMTP_EMAIL,
     to: recipient,
     subject: subject,
-    text: plainTextBody,
+    text: plainTextBodyWithCampaignId,
     html: body,
     replyTo: replyToEmail || senderEmail,
     attachDataUrls: true,
