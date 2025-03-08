@@ -19,6 +19,7 @@ export const AddBulkSMTPRouteParamsSchema = z.object({
   interval: z.number(),
   priority: z.string().optional(),
   smtpCredentials: SMTPCredentialsSchema,
+  includeDelay: z.boolean()
 });
 
 export const AddSMTPRouteParamsSchema = z.object({

@@ -61,6 +61,7 @@ export const AddBulkSkyfunnelSesRouteParamsSchema = z.object({
   batchDelay: z.number(),
   interval: z.number(),
   priority: z.string().optional(),
+  includeDelay: z.boolean()
 });
 
 export const AddSESEmailRouteParamsSchema = z.object({
