@@ -3,7 +3,7 @@ import { Job, JobType, Queue } from "bullmq";
 import { DEFAULT_JOB_OPTIONS, DefaultPrioritySlug, getPriority, PAUSE_CAMPAIGN_LIST_KEY } from "../config";
 import { AppError } from "../lib/errorHandler";
 import { getRedisConnection } from "../lib/redis";
-import { generateJobId } from "../lib/utils";
+import { generateJobId, generateRandomDelay } from "../lib/utils";
 import { emailQueueManager } from "./queue";
 import { AddBulkSMTPRouteParamType, AddSMTPRouteParamsType, SMTPJobOptions } from "./types/smtpQueue";
 
@@ -198,7 +198,7 @@ class SkyFunnelSESQueue extends BaseEmailQueue {
   }
 
   async addBulkEmailsToQueue(
-    { campaignOrg, emails, interval, batchDelay }: AddBulkSkyfunnelSesRouteParamType,
+    { campaignOrg, emails, interval, batchDelay, includeDelay }: AddBulkSkyfunnelSesRouteParamType,
     prioritySlug: string = DefaultPrioritySlug,
   ) {
     if (!emails.length || !emails[0]?.emailCampaignId) {
@@ -211,9 +211,8 @@ class SkyFunnelSESQueue extends BaseEmailQueue {
     }
 
     const priorityNumber = getPriority(prioritySlug);
-
     const jobs = emails.map((email, index) => {
-      const delay = batchDelay + index * interval * 1000;
+      const delay = batchDelay + index * (includeDelay ? generateRandomDelay(interval) : interval * 1000);
       const jobId = generateJobId(email.emailCampaignId, email.id, "SES");
 
       return {
@@ -256,7 +255,7 @@ class SMTPQueue extends BaseEmailQueue {
   }
 
   async addBulkEmailsToQueue(
-    { campaignOrg, emails, interval, smtpCredentials, batchDelay }: AddBulkSMTPRouteParamType,
+    { campaignOrg, emails, interval, smtpCredentials, batchDelay, includeDelay }: AddBulkSMTPRouteParamType,
     prioritySlug: string = DefaultPrioritySlug,
   ) {
     if (!emails.length || !emails[0]?.emailCampaignId) {
@@ -271,7 +270,7 @@ class SMTPQueue extends BaseEmailQueue {
     const priorityNumber = getPriority(prioritySlug);
 
     const jobs = emails.map((email, index) => {
-      const delay = batchDelay + index * interval * 1000;
+      const delay = batchDelay + index * (includeDelay ? generateRandomDelay(interval) : interval * 1000);
       const jobId = generateJobId(email.emailCampaignId, email.id, "SMTP");
 
       return {

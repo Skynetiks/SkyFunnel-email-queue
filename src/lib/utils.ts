@@ -112,3 +112,12 @@ export function isWithinPeriod(startTimeUTC: string | null, endTimeUTC: string |
 
   return now.toFormat("HH:mm") >= start.toFormat("HH:mm") && now.toFormat("HH:mm") <= end.toFormat("HH:mm");
 }
+
+export const generateRandomDelay = (currentInterval: number) => {
+
+  // generates a random delay between 20 to 90 seconds and adds it to the current interval. (ms)
+
+  const randomDelay = Math.floor(Math.random() * (90 - 20 + 1)) + 20;
+  const newRandomDelay = (currentInterval * 1000) + (randomDelay * 1000);
+  return newRandomDelay;
+}
