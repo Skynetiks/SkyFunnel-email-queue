@@ -3,19 +3,13 @@ import { Job, Worker } from "bullmq";
 import { QUEUE_CONFIG, SMTP_EMAIL_QUEUE_KEY } from "../config";
 import { query } from "../lib/db";
 import { AppError, errorHandler } from "../lib/errorHandler";
-import {
-  getCampaignById,
-  getLeadById,
-  getOrganizationById,
-  getOrganizationSubscription,
-  getSuppressedEmail,
-  getUserById,
-} from "../db/emailQueries";
+import { cache__getCampaignById, cache__getOrganizationSubscription, getSuppressedEmail } from "../db/emailQueries";
 import { getEmailBody } from "../lib/email";
 import { Debug, generateJobId, getDelayedJobId, isWithinPeriod } from "../lib/utils";
 import { AddSMTPRouteParamsSchema, AddSMTPRouteParamsType, SMTPCredentials } from "../server/types/smtpQueue";
 import { sendSMTPEmail, smtpErrorHandler } from "../lib/smtp";
 import { Email } from "../server/types/emailQueue";
+import { usageRedisStore } from "../lib/usageRedisStore";
 
 const handleJob = async (job: Job) => {
   console.log("[SMTP_WORKER] Job Started with jobID", job.id);
@@ -61,22 +55,36 @@ async function sendEmailAndUpdateStatus(
   smtpCredentials: SMTPCredentials,
   job: Job<AddSMTPRouteParamsType>,
 ) {
-  const leadResultsPromise = getLeadById(email.leadId);
-  const userResultsPromise = getUserById(email.senderId);
-  const campaignPromise = getCampaignById(email.emailCampaignId);
+  const organizationId = campaignOrg.id;
+  const campaignPromise = cache__getCampaignById(email.emailCampaignId);
+  const organizationSubscriptionPromise = await cache__getOrganizationSubscription(organizationId);
 
-  const [lead, user, campaign] = await Promise.all([leadResultsPromise, userResultsPromise, campaignPromise]);
+  const [campaign, organizationSubscription] = await Promise.all([campaignPromise, organizationSubscriptionPromise]);
 
-  const organizationId = user.organizationId;
-  const organization = await getOrganizationById(organizationId);
+  console.log({
+    email,
+    organizationSubscription,
+    campaign,
+  });
 
-  const organizationSubscription = await getOrganizationSubscription(organization.orgSubscriptionId);
-
-  if (!user) throw new AppError("NOT_FOUND", "User not found");
-  if (!lead) throw new AppError("NOT_FOUND", "Lead not found");
   if (!campaign) throw new AppError("NOT_FOUND", "Campaign not found");
+  if (!organizationSubscription) throw new AppError("NOT_FOUND", "Organization Subscription not found");
 
-  const suppressedResults = await getSuppressedEmail(lead.email);
+  const orgUsage = await usageRedisStore.getUsage(organizationId);
+  Debug.log("Usage of organization " + organizationId + " is " + orgUsage);
+  if (orgUsage >= organizationSubscription.allowedEmails) {
+    Debug.log(
+      `Organization ${organizationId} has reached its limit of ${orgUsage}/${organizationSubscription.allowedEmails} emails`,
+    );
+
+    Promise.all([
+      query('UPDATE "EmailCampaign" SET "status" = "LIMIT" WHERE id = $1', [email.emailCampaignId]),
+      query('UPDATE "Email" SET status = $1 WHERE id = $2', ["LIMIT", email.id]),
+    ]);
+    return;
+  }
+
+  const suppressedResults = await getSuppressedEmail(email.leadEmail);
 
   const { emailBodyHTML, footer, header } = getEmailBody({
     campaignId: email.emailCampaignId,
@@ -86,7 +94,7 @@ async function sendEmailAndUpdateStatus(
     leadLastName: email.leadLastName || "",
     leadEmail: email.leadEmail,
     leadCompanyName: email.leadCompanyName || "",
-    leadId: lead.id,
+    leadId: email.leadId,
     organizationName: campaignOrg.name,
     subscriptionType: organizationSubscription.leadManagementModuleType,
   });
@@ -128,7 +136,7 @@ async function sendEmailAndUpdateStatus(
         "AND RECIPIENT:",
         email.leadEmail,
       );
-      const updateEmailResult = query('UPDATE "Email" SET status = $1, "messageId" = $2 WHERE id = $3', [
+      const updateEmailResult = query('UPDATE "Email" SET  status = $1, "messageId" = $2 WHERE id = $3', [
         "SENT",
         emailSent.messageId,
         email.id,
@@ -143,6 +151,8 @@ async function sendEmailAndUpdateStatus(
         'UPDATE "Organization" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1',
         [campaignOrg.id],
       );
+
+      await usageRedisStore.incrementUsage(organizationId);
 
       const addDeliveryEventResult = query(
         'INSERT INTO "EmailEvent" ("id", "emailId", "eventType", "timestamp", "campaignId") VALUES (uuid_generate_v4(), $1, $2, $3, $4)',

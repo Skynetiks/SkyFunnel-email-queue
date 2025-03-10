@@ -4,17 +4,11 @@ import { QUEUE_CONFIG, SES_SKYFUNNEL_EMAIL_QUEUE_KEY } from "../config";
 import { query } from "../lib/db";
 import { AddSESEmailRouteParamsSchema, Email } from "../server/types/emailQueue";
 import { AppError, errorHandler } from "../lib/errorHandler";
-import {
-  getCampaignById,
-  getLeadById,
-  getOrganizationById,
-  getOrganizationSubscription,
-  getSuppressedEmail,
-  getUserById,
-} from "../db/emailQueries";
+import { cache__getCampaignById, cache__getOrganizationSubscription, getSuppressedEmail } from "../db/emailQueries";
 import { getEmailBody } from "../lib/email";
 import { sendEmailSES } from "../lib/aws";
-import { generateJobId, getDelayedJobId, isWithinPeriod } from "../lib/utils";
+import { Debug, generateJobId, getDelayedJobId, isWithinPeriod } from "../lib/utils";
+import { usageRedisStore } from "../lib/usageRedisStore";
 
 const handleJob = async (job: Job) => {
   console.log("[SKYFUNNEL_WORKER] Job Started with jobID", job.id);
@@ -50,35 +44,38 @@ const handleJob = async (job: Job) => {
 };
 
 async function sendEmailAndUpdateStatus(email: Email, campaignOrg: { name: string; id: string }) {
-  const leadResultsPromise = getLeadById(email.leadId);
-  const userResultsPromise = getUserById(email.senderId);
-  const campaignPromise = getCampaignById(email.emailCampaignId);
-  const organizationPromise = getOrganizationById(campaignOrg.id);
+  const campaignPromise = cache__getCampaignById(email.emailCampaignId);
+  const organizationSubscriptionPromise = await cache__getOrganizationSubscription(campaignOrg.id);
 
-  const [lead, user, campaign, organization] = await Promise.all([
-    leadResultsPromise,
-    userResultsPromise,
-    campaignPromise,
-    organizationPromise,
-  ]);
+  const [campaign, orgSubscription] = await Promise.all([campaignPromise, organizationSubscriptionPromise]);
 
-  if (!user) throw new AppError("NOT_FOUND", "User not found");
-  if (!lead) throw new AppError("NOT_FOUND", "Lead not found");
   if (!campaign) throw new AppError("NOT_FOUND", "Campaign not found");
-  if (!organization) throw new AppError("NOT_FOUND", "Organization not found");
+  if (!orgSubscription) throw new AppError("NOT_FOUND", "Organization not found");
 
-  const isEmailsBlocked = organization.isEmailBlocked;
+  const isEmailsBlocked = orgSubscription.isEmailBlocked;
   if (isEmailsBlocked) {
-    console.log("Emails are blocked for organization " + organization.id);
+    console.log("Emails are blocked for organization " + campaignOrg.id);
     // TODO: Add a status "BLOCKED" to the email
     await query('UPDATE "Email" SET status = $1 WHERE id = $2', ["ERROR", email.id]);
 
     // Silent return if emails are blocked. as we don't want to retry sending emails to blocked emails
     return;
   }
+  const organizationId = campaignOrg.id;
+  const orgUsage = await usageRedisStore.getUsage(organizationId);
+  Debug.log("Usage of organization " + organizationId + " is " + orgUsage);
+  if (orgUsage >= orgSubscription.allowedEmails) {
+    Debug.log(
+      `Organization ${organizationId} has reached its limit of ${orgUsage}/${orgSubscription.allowedEmails} emails`,
+    );
 
-  const suppressedResults = await getSuppressedEmail(lead.email);
-  const organizationSubscription = await getOrganizationSubscription(organization.orgSubscriptionId);
+    Promise.all([
+      query('UPDATE "EmailCampaign" SET "status" = "LIMIT" WHERE id = $1', [email.emailCampaignId]),
+      query('UPDATE "Email" SET status = $1 WHERE id = $2', ["LIMIT", email.id]),
+    ]);
+    return;
+  }
+  const suppressedResults = await getSuppressedEmail(email.leadEmail);
 
   const { emailBodyHTML, footer, header } = getEmailBody({
     campaignId: email.emailCampaignId,
@@ -88,9 +85,9 @@ async function sendEmailAndUpdateStatus(email: Email, campaignOrg: { name: strin
     leadLastName: email.leadLastName || "",
     leadEmail: email.leadEmail,
     leadCompanyName: email.leadCompanyName || "",
-    leadId: lead.id,
+    leadId: email.leadId,
     organizationName: campaignOrg.name,
-    subscriptionType: organizationSubscription.leadManagementModuleType,
+    subscriptionType: orgSubscription.leadManagementModuleType,
   });
 
   if (suppressedResults) {
@@ -110,7 +107,7 @@ async function sendEmailAndUpdateStatus(email: Email, campaignOrg: { name: strin
     senderEmail: campaign.senderEmail,
     senderName: campaign.senderName,
     body: header + emailBodyHTML + footer,
-    recipient: lead.email,
+    recipient: email.leadEmail,
     subject: campaign.subject,
     replyToEmail: campaign.replyToEmail,
     campaignId: email.emailCampaignId,
@@ -132,6 +129,8 @@ async function sendEmailAndUpdateStatus(email: Email, campaignOrg: { name: strin
       'UPDATE "Organization" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1',
       [campaignOrg.id],
     );
+
+    await usageRedisStore.incrementUsage(organizationId);
 
     const addDeliveryEventResult = query(
       'INSERT INTO "EmailEvent" ("id", "emailId", "eventType", "timestamp", "campaignId") VALUES (uuid_generate_v4(), $1, $2, $3, $4)',

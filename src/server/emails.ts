@@ -212,7 +212,7 @@ class SkyFunnelSESQueue extends BaseEmailQueue {
 
     const priorityNumber = getPriority(prioritySlug);
     const jobs = emails.map((email, index) => {
-      const delay = batchDelay + (index * (includeDelay ? generateRandomDelay(interval) : interval * 1000));
+      const delay = batchDelay + index * (includeDelay ? generateRandomDelay(interval) : interval * 1000);
       const jobId = generateJobId(email.emailCampaignId, email.id, "SES");
 
       return {
@@ -270,7 +270,7 @@ class SMTPQueue extends BaseEmailQueue {
     const priorityNumber = getPriority(prioritySlug);
 
     const jobs = emails.map((email, index) => {
-      const delay = batchDelay + (index * (includeDelay ? generateRandomDelay(interval) : interval * 1000));
+      const delay = batchDelay + index * (includeDelay ? generateRandomDelay(interval) : interval * 1000);
       const jobId = generateJobId(email.emailCampaignId, email.id, "SMTP");
 
       return {

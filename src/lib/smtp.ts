@@ -258,6 +258,15 @@ export async function sendSMTPEmail(email: Email, smtpCredentials: SMTPCredentia
     attachDataUrls: true,
   } satisfies Options;
 
+  if (process.env.SKIP_SMTP_SEND === "SKIP") {
+    return {
+      messageId: String(Math.random()),
+      accepted: [],
+      rejected: [],
+      response: "SKIP",
+    };
+  }
+
   const decryptedPass = decryptToken(smtpCredentials.encryptedPass);
   const info = await sendNodemailerEmailRaw(
     {
