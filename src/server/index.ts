@@ -120,12 +120,15 @@ app.post("/smtp/send-email", async (req, res, next) => {
     const { smtpCredentials } = data;
     const { emailBody, receiverEmail, subject, senderEmail, replyToEmail, senderName } = data.emailDetails;
 
-    await sendSMTPEmail({ body: emailBody, recipient: receiverEmail, senderEmail, replyToEmail, subject, senderName }, smtpCredentials);
+    await sendSMTPEmail(
+      { body: emailBody, recipient: receiverEmail, senderEmail, replyToEmail, subject, senderName },
+      smtpCredentials,
+    );
 
     res.status(200).json({
       success: true,
       message: "Email sent",
-      sent: true
+      sent: true,
     });
   } catch (error) {
     next(error);
@@ -258,7 +261,7 @@ app.post("/ses/send-email", async (req, res, next) => {
     res.status(200).json({
       success: true,
       message: "Email sent",
-      sent: true
+      sent: true,
     });
   } catch (error) {
     next(error);

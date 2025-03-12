@@ -245,7 +245,10 @@ type Email = {
 export async function sendSMTPEmail(email: Email, smtpCredentials: SMTPCredentials) {
   const { body, senderEmail, senderName, recipient, subject, replyToEmail, campaignId } = email;
   const plainTextBody = convertHtmlToText(body);
+  const campaignIdHtml = campaignId ? `<p style='display:none'>thread::${campaignId}</p>` : "";
   const plainTextBodyWithCampaignId = campaignId ? `${plainTextBody} thread::${campaignId}` : plainTextBody;
+  const html = `${body} ${campaignIdHtml}`;
+
   // Prepare the email options
   const mailOptions = {
     from: `${senderName} <${senderEmail}>`,
@@ -253,7 +256,7 @@ export async function sendSMTPEmail(email: Email, smtpCredentials: SMTPCredentia
     to: recipient,
     subject: subject,
     text: plainTextBodyWithCampaignId,
-    html: body,
+    html: html,
     replyTo: replyToEmail || senderEmail,
     attachDataUrls: true,
   } satisfies Options;

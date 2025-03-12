@@ -45,6 +45,8 @@ export const EmailSchema = z.object({
       }),
     ),
 
+  activeDays: z.array(z.enum(["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"])),
+  timezone: z.string(),
   isSentMessage: z.boolean(),
   isRead: z.boolean(),
   status: z.string(),
@@ -61,7 +63,7 @@ export const AddBulkSkyfunnelSesRouteParamsSchema = z.object({
   batchDelay: z.number(),
   interval: z.number(),
   priority: z.string().optional(),
-  includeDelay: z.boolean()
+  includeDelay: z.boolean(),
 });
 
 export const AddSESEmailRouteParamsSchema = z.object({

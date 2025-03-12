@@ -113,11 +113,27 @@ export function isWithinPeriod(startTimeUTC: string | null, endTimeUTC: string |
   return now.toFormat("HH:mm") >= start.toFormat("HH:mm") && now.toFormat("HH:mm") <= end.toFormat("HH:mm");
 }
 
-export const generateRandomDelay = (currentInterval: number) => {
+export enum Days {
+  MONDAY = "MONDAY",
+  TUESDAY = "TUESDAY",
+  WEDNESDAY = "WEDNESDAY",
+  THURSDAY = "THURSDAY",
+  FRIDAY = "FRIDAY",
+  SATURDAY = "SATURDAY",
+  SUNDAY = "SUNDAY",
+}
+export function isActiveDay(activeDays: Days[], timezone: string = "UTC"): boolean {
+  // Use luxon to get the current day in the specified timezone
+  const today = DateTime.now().setZone(timezone);
+  const todayDayName = today.toFormat("cccc").toUpperCase();
 
+  return activeDays.includes(todayDayName as Days);
+}
+
+export const generateRandomDelay = (currentInterval: number) => {
   // generates a random delay between 20 to 90 seconds and adds it to the current interval. (ms)
 
   const randomDelay = Math.floor(Math.random() * (90 - 20 + 1)) + 20;
-  const newRandomDelay = (currentInterval * 1000) + (randomDelay * 1000);
+  const newRandomDelay = currentInterval * 1000 + randomDelay * 1000;
   return newRandomDelay;
-}
+};

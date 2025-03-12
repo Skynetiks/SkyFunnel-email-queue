@@ -5,7 +5,7 @@ import { query } from "../lib/db";
 import { AppError, errorHandler } from "../lib/errorHandler";
 import { cache__getCampaignById, cache__getOrganizationSubscription, getSuppressedEmail } from "../db/emailQueries";
 import { getEmailBody } from "../lib/email";
-import { Debug, generateJobId, getDelayedJobId, isWithinPeriod } from "../lib/utils";
+import { Days, Debug, generateJobId, getDelayedJobId, isActiveDay, isWithinPeriod } from "../lib/utils";
 import { AddSMTPRouteParamsSchema, AddSMTPRouteParamsType, SMTPCredentials } from "../server/types/smtpQueue";
 import { sendSMTPEmail, smtpErrorHandler } from "../lib/smtp";
 import { Email } from "../server/types/emailQueue";
@@ -24,10 +24,15 @@ const handleJob = async (job: Job) => {
     const { email, campaignOrg, smtpCredentials } = validatedData.data;
     const isPaused = await smtpQueue.isCampaignPaused(email.emailCampaignId);
     const isWithinPeriodValue = isWithinPeriod(email.startTimeInUTC, email.endTimeInUTC);
+
+    const isActiveDayValue = isActiveDay(email.activeDays as Days[], email.timezone);
     Debug.devLog(isPaused ? "[SMTP_WORKER] Campaign is paused" : "[SMTP_WORKER] Campaign is not paused");
-    if (isPaused || !isWithinPeriodValue) {
+
+    if (isPaused || !isWithinPeriodValue || !isActiveDayValue) {
       // TODO: calculate delay time based on the next start time
-      const DELAY_TIME = 1000 * QUEUE_CONFIG.delayAfterPauseInSeconds;
+      let DELAY_TIME = 1000 * QUEUE_CONFIG.delayAfterPauseInSeconds;
+      const ONE_DAY_IN_MS = 86400000;
+      if (!isActiveDayValue) DELAY_TIME = ONE_DAY_IN_MS;
 
       if (!isWithinPeriodValue) Debug.devLog("[SMTP_WORKER] Delaying the campaign because it is not within the period");
 

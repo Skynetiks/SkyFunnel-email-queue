@@ -48,6 +48,8 @@ const getSendEmailCommand = (
   campaignId?: string,
 ) => {
   const bodyWithCampaignId = campaignId ? `${body} thread::${campaignId}` : body;
+  const campaignIdHtml = campaignId ? `<p style='display:none'>thread::${campaignId}</p>` : "";
+  const bodyWithCampaignIdHtml = `${body} ${campaignIdHtml}`;
   return new SendEmailCommand({
     Destination: {
       /* required */
@@ -66,7 +68,7 @@ const getSendEmailCommand = (
         /* required */
         Html: {
           Charset: "UTF-8",
-          Data: body,
+          Data: bodyWithCampaignIdHtml,
         },
         Text: {
           Charset: "UTF-8",

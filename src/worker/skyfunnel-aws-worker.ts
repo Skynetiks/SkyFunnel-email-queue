@@ -7,7 +7,7 @@ import { AppError, errorHandler } from "../lib/errorHandler";
 import { cache__getCampaignById, cache__getOrganizationSubscription, getSuppressedEmail } from "../db/emailQueries";
 import { getEmailBody } from "../lib/email";
 import { sendEmailSES } from "../lib/aws";
-import { Debug, generateJobId, getDelayedJobId, isWithinPeriod } from "../lib/utils";
+import { Days, Debug, generateJobId, getDelayedJobId, isActiveDay, isWithinPeriod } from "../lib/utils";
 import { usageRedisStore } from "../lib/usageRedisStore";
 
 const handleJob = async (job: Job) => {
@@ -22,8 +22,11 @@ const handleJob = async (job: Job) => {
     const { email, campaignOrg } = validatedData.data;
     const isPaused = await skyfunnelSesQueue.isCampaignPaused(email.emailCampaignId);
     console.log("isPaused", isPaused);
-    if (isPaused || !isWithinPeriod(email.startTimeInUTC, email.endTimeInUTC)) {
-      const DELAY_TIME = 1000 * QUEUE_CONFIG.delayAfterPauseInSeconds;
+    const isActiveDayValue = isActiveDay(email.activeDays as Days[], email.timezone);
+    if (isPaused || !isWithinPeriod(email.startTimeInUTC, email.endTimeInUTC) || !isActiveDayValue) {
+      let DELAY_TIME = 1000 * QUEUE_CONFIG.delayAfterPauseInSeconds;
+      const ONE_DAY_IN_MS = 86400000;
+      if (!isActiveDayValue) DELAY_TIME = ONE_DAY_IN_MS;
 
       try {
         const queue = skyfunnelSesQueue.getQueue();
