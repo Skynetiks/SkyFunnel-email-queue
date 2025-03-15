@@ -3,12 +3,13 @@ import { Job, Worker } from "bullmq";
 import { QUEUE_CONFIG, SMTP_EMAIL_QUEUE_KEY } from "../config";
 import { query } from "../lib/db";
 import { AppError, errorHandler } from "../lib/errorHandler";
-import { getCampaignById, getLeadById, getSuppressedEmail, getUserById } from "../db/emailQueries";
+import { cache__getCampaignById, cache__getOrganizationSubscription, getSuppressedEmail } from "../db/emailQueries";
 import { getEmailBody } from "../lib/email";
-import { Debug, generateJobId, getDelayedJobId } from "../lib/utils";
+import { Days, Debug, generateJobId, getDelayedJobId, isActiveDay, isWithinPeriod } from "../lib/utils";
 import { AddSMTPRouteParamsSchema, AddSMTPRouteParamsType, SMTPCredentials } from "../server/types/smtpQueue";
 import { sendSMTPEmail, smtpErrorHandler } from "../lib/smtp";
 import { Email } from "../server/types/emailQueue";
+import { usageRedisStore } from "../lib/usageRedisStore";
 
 const handleJob = async (job: Job) => {
   console.log("[SMTP_WORKER] Job Started with jobID", job.id);
@@ -22,9 +23,18 @@ const handleJob = async (job: Job) => {
 
     const { email, campaignOrg, smtpCredentials } = validatedData.data;
     const isPaused = await smtpQueue.isCampaignPaused(email.emailCampaignId);
+    const isWithinPeriodValue = isWithinPeriod(email.startTimeInUTC, email.endTimeInUTC);
+
+    const isActiveDayValue = isActiveDay(email.activeDays as Days[], email.timezone);
     Debug.devLog(isPaused ? "[SMTP_WORKER] Campaign is paused" : "[SMTP_WORKER] Campaign is not paused");
-    if (isPaused) {
-      const DELAY_TIME = 1000 * QUEUE_CONFIG.delayAfterPauseInSeconds;
+
+    if (isPaused || !isWithinPeriodValue || !isActiveDayValue) {
+      // TODO: calculate delay time based on the next start time
+      let DELAY_TIME = 1000 * QUEUE_CONFIG.delayAfterPauseInSeconds;
+      const ONE_DAY_IN_MS = 86400000;
+      if (!isActiveDayValue) DELAY_TIME = ONE_DAY_IN_MS;
+
+      if (!isWithinPeriodValue) Debug.devLog("[SMTP_WORKER] Delaying the campaign because it is not within the period");
 
       try {
         const queue = smtpQueue.getQueue();
@@ -50,17 +60,36 @@ async function sendEmailAndUpdateStatus(
   smtpCredentials: SMTPCredentials,
   job: Job<AddSMTPRouteParamsType>,
 ) {
-  const leadResultsPromise = getLeadById(email.leadId);
-  const userResultsPromise = getUserById(email.senderId);
-  const campaignPromise = getCampaignById(email.emailCampaignId);
+  const organizationId = campaignOrg.id;
+  const campaignPromise = cache__getCampaignById(email.emailCampaignId);
+  const organizationSubscriptionPromise = await cache__getOrganizationSubscription(organizationId);
 
-  const [lead, user, campaign] = await Promise.all([leadResultsPromise, userResultsPromise, campaignPromise]);
+  const [campaign, organizationSubscription] = await Promise.all([campaignPromise, organizationSubscriptionPromise]);
 
-  if (!user) throw new AppError("NOT_FOUND", "User not found");
-  if (!lead) throw new AppError("NOT_FOUND", "Lead not found");
+  console.log({
+    email,
+    organizationSubscription,
+    campaign,
+  });
+
   if (!campaign) throw new AppError("NOT_FOUND", "Campaign not found");
+  if (!organizationSubscription) throw new AppError("NOT_FOUND", "Organization Subscription not found");
 
-  const suppressedResults = await getSuppressedEmail(lead.email);
+  const orgUsage = await usageRedisStore.getUsage(organizationId);
+  Debug.log("Usage of organization " + organizationId + " is " + orgUsage);
+  if (orgUsage >= organizationSubscription.allowedEmails) {
+    Debug.log(
+      `Organization ${organizationId} has reached its limit of ${orgUsage}/${organizationSubscription.allowedEmails} emails`,
+    );
+
+    Promise.all([
+      query('UPDATE "EmailCampaign" SET "status" = "LIMIT" WHERE id = $1', [email.emailCampaignId]),
+      query('UPDATE "Email" SET status = $1 WHERE id = $2', ["LIMIT", email.id]),
+    ]);
+    return;
+  }
+
+  const suppressedResults = await getSuppressedEmail(email.leadEmail);
 
   const { emailBodyHTML, footer, header } = getEmailBody({
     campaignId: email.emailCampaignId,
@@ -70,13 +99,14 @@ async function sendEmailAndUpdateStatus(
     leadLastName: email.leadLastName || "",
     leadEmail: email.leadEmail,
     leadCompanyName: email.leadCompanyName || "",
-    leadId: lead.id,
+    leadId: email.leadId,
     organizationName: campaignOrg.name,
+    subscriptionType: organizationSubscription.leadManagementModuleType,
   });
 
   if (suppressedResults) {
     Debug.devLog("UPDATING EMAIL STATUS TO SUPPRESS FOR EMAIL ID: ", email.id);
-    await query('UPDATE "Email" SET status = $1 WHERE id = $2', ["SUPPRESS", email.id])
+    await query('UPDATE "Email" SET status = $1 WHERE id = $2', ["SUPPRESS", email.id]);
     Debug.devLog("INCREMENTING EMAIL_CAMPAIGN sentEmailCount: ", email.id);
     await query('UPDATE "EmailCampaign" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1', [
       email.emailCampaignId,
@@ -99,13 +129,19 @@ async function sendEmailAndUpdateStatus(
         recipient: email.leadEmail,
         subject: campaign.subject,
         replyToEmail: campaign.replyToEmail,
+        campaignId: email.emailCampaignId,
       },
       smtpCredentials,
     );
 
     if (emailSent && emailSent.accepted && emailSent.messageId) {
-      Debug.devLog("UPDATING STATUS FOR THE Email WITH MESSAGE_ID:", emailSent.messageId, "AND RECIPIENT:", email.leadEmail);
-      const updateEmailResult = query('UPDATE "Email" SET status = $1, "messageId" = $2 WHERE id = $3', [
+      Debug.devLog(
+        "UPDATING STATUS FOR THE Email WITH MESSAGE_ID:",
+        emailSent.messageId,
+        "AND RECIPIENT:",
+        email.leadEmail,
+      );
+      const updateEmailResult = query('UPDATE "Email" SET  status = $1, "messageId" = $2 WHERE id = $3', [
         "SENT",
         emailSent.messageId,
         email.id,
@@ -116,22 +152,31 @@ async function sendEmailAndUpdateStatus(
         [email.emailCampaignId],
       );
 
+      const updateOrganizationResult = query(
+        'UPDATE "Organization" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1',
+        [campaignOrg.id],
+      );
+
+      await usageRedisStore.incrementUsage(organizationId);
+
       const addDeliveryEventResult = query(
         'INSERT INTO "EmailEvent" ("id", "emailId", "eventType", "timestamp", "campaignId") VALUES (uuid_generate_v4(), $1, $2, $3, $4)',
         [email.id, "DELIVERY", new Date().toISOString(), email.emailCampaignId],
       );
 
-      await Promise.all([updateEmailResult, updateCampaignResult, addDeliveryEventResult]);
+      await Promise.all([updateEmailResult, updateCampaignResult, addDeliveryEventResult, updateOrganizationResult]);
     } else {
-      console.error("[SMTP_WORKER] Error While Sending Emails via Smtp for", email.leadEmail, emailSent ? emailSent.response : "");
+      console.error(
+        "[SMTP_WORKER] Error While Sending Emails via Smtp for",
+        email.leadEmail,
+        emailSent ? emailSent.response : "",
+      );
       throw new AppError("INTERNAL_SERVER_ERROR", "Email not sent by SMTP");
     }
   } catch (error) {
     smtpErrorHandler(error, job);
   }
 }
-
-
 
 const redisUrl = process.env.REDIS_URL;
 const worker = new Worker(SMTP_EMAIL_QUEUE_KEY, (job) => handleJob(job), {
@@ -148,8 +193,7 @@ worker.on("failed", async (job) => {
   if (job && "id" in job.data.email) {
     console.log("Updating email status to ERROR");
     await query('UPDATE "Email" SET status = $1 WHERE id = $2', ["ERROR", job.data.email.id]);
-  }
-  else {
+  } else {
     Debug.devLog("Failed to update email status to ERROR as there was not email id in the job data", job);
   }
 
@@ -162,11 +206,11 @@ worker.on("completed", () => {
 
 worker.on("error", (error) => {
   Debug.devLog("[SMTP_WORKER] Error in SMTP worker", error);
-})
+});
 
 worker.on("closing", () => {
   Debug.devLog("[SMTP_WORKER] SMTP worker is closing");
-})
+});
 
 worker.on("ready", () => {
   console.log("[SMTP_WORKER] Worker is ready");
@@ -176,11 +220,11 @@ const gracefulShutdown = async (signal: string) => {
   console.log(`Received ${signal}, closing server...`);
   await worker.close();
   process.exit(0);
-}
+};
 
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("uncaughtException", function (err) {
   Debug.error(err, "Uncaught exception");
 });

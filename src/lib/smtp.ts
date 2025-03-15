@@ -239,11 +239,15 @@ type Email = {
   subject: string;
   body: string;
   replyToEmail?: string;
+  campaignId?: string;
 };
 
 export async function sendSMTPEmail(email: Email, smtpCredentials: SMTPCredentials) {
-  const { body, senderEmail, senderName, recipient, subject, replyToEmail } = email;
+  const { body, senderEmail, senderName, recipient, subject, replyToEmail, campaignId } = email;
   const plainTextBody = convertHtmlToText(body);
+  const campaignIdHtml = campaignId ? `<p style='display:none'>thread::${campaignId}</p>` : "";
+  const plainTextBodyWithCampaignId = campaignId ? `${plainTextBody} thread::${campaignId}` : plainTextBody;
+  const html = `${body} ${campaignIdHtml}`;
 
   // Prepare the email options
   const mailOptions = {
@@ -251,11 +255,20 @@ export async function sendSMTPEmail(email: Email, smtpCredentials: SMTPCredentia
     sender: process.env.ADMIN_SMTP_EMAIL,
     to: recipient,
     subject: subject,
-    text: plainTextBody,
-    html: body,
+    text: plainTextBodyWithCampaignId,
+    html: html,
     replyTo: replyToEmail || senderEmail,
     attachDataUrls: true,
   } satisfies Options;
+
+  if (process.env.SKIP_SMTP_SEND === "SKIP") {
+    return {
+      messageId: String(Math.random()),
+      accepted: [],
+      rejected: [],
+      response: "SKIP",
+    };
+  }
 
   const decryptedPass = decryptToken(smtpCredentials.encryptedPass);
   const info = await sendNodemailerEmailRaw(

@@ -16,7 +16,6 @@ const sslOptions = !isDevelopment
     }
   : { rejectUnauthorized: false };
 
-console.log(sslOptions)
 let pool: pg.Pool | undefined;
 
 export function getPool() {
@@ -24,7 +23,7 @@ export function getPool() {
     Debug.log("Creating a new database pool");
     pool = new Pool({
       connectionString: process.env.DATABASE_URL,
-      ssl: sslOptions,
+      ssl: process.env.NODE_ENV === "production" ? sslOptions : false,
       idleTimeoutMillis: 30000, // 30 seconds
       max: 100, // Maximum concurrent connections
     });
@@ -34,12 +33,15 @@ export function getPool() {
 
 getPool();
 export const query = async (text: string, params: (string | number)[]) => {
+  const start = Date.now();
   const activePool = await getPool().connect(); // Acquire client
   try {
     if (!activePool) {
       throw new Error("Database pool is not initialized");
     }
     const result = await activePool.query(text, params);
+    const duration = Date.now() - start;
+    Debug.log(`[DB] Query executed in ${duration / 1000} seconds`, text);
     return result;
   } catch (error) {
     Debug.error("Query execution failed:", error);

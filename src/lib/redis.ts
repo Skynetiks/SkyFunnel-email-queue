@@ -18,7 +18,7 @@ export async function getRedisConnection() {
       lazyConnect: true,
       retryStrategy: function (times: number) {
         return Math.max(Math.min(Math.exp(times), 20000), 1000);
-     },
+      },
     });
 
     connection.on("error", (err) => {

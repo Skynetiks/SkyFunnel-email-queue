@@ -3,7 +3,7 @@ import { Job, JobType, Queue } from "bullmq";
 import { DEFAULT_JOB_OPTIONS, DefaultPrioritySlug, getPriority, PAUSE_CAMPAIGN_LIST_KEY } from "../config";
 import { AppError } from "../lib/errorHandler";
 import { getRedisConnection } from "../lib/redis";
-import { generateJobId } from "../lib/utils";
+import { generateJobId, generateRandomDelay } from "../lib/utils";
 import { emailQueueManager } from "./queue";
 import { AddBulkSMTPRouteParamType, AddSMTPRouteParamsType, SMTPJobOptions } from "./types/smtpQueue";
 
@@ -49,16 +49,16 @@ class BaseEmailQueue {
   }
 
   /**
-   * Delays remaing jobs and create a new job witht he delay for the existing job
-   * @param campaignId 
-   * @param delayInSeconds 
-   * @returns 
+   * Delays remaining jobs and create a new job with the delay for the existing job
+   * @param campaignId
+   * @param delayInSeconds
+   * @returns
    */
   async delayRemainingJobs(currentJob: Job, delayInSeconds: number) {
-    const comapignId = currentJob.data.email.emailCampaignId;
-    const jobs = await this.getJobsByJobIdKeyword(comapignId, ["delayed", "paused", "waiting"]);
+    const campaignId = currentJob.data.email.emailCampaignId;
+    const jobs = await this.getJobsByJobIdKeyword(campaignId, ["delayed", "paused", "waiting"]);
     if (!jobs.length) {
-      console.log(`No jobs found for campaignId: ${comapignId}`);
+      console.log(`No jobs found for campaignId: ${campaignId}`);
       return 0;
     }
 
@@ -86,11 +86,7 @@ class BaseEmailQueue {
     //add new job with the currents job data and delay
     const { email, campaignOrg, smtpCredentials } = currentJob.data;
     try {
-      await smtpQueue.addEmailToQueue(
-        { email, campaignOrg, smtpCredentials },
-        "default",
-        delayInSeconds
-      );
+      await smtpQueue.addEmailToQueue({ email, campaignOrg, smtpCredentials }, "default", delayInSeconds);
       console.log(`[SMTP_WORKER] New delayed job added to queue with a delay of ${delayInSeconds * 1000} ms`);
     } catch (moveError) {
       console.error("[SMTP_WORKER] Failed to add job to queue", moveError);
@@ -202,7 +198,7 @@ class SkyFunnelSESQueue extends BaseEmailQueue {
   }
 
   async addBulkEmailsToQueue(
-    { campaignOrg, emails, interval, batchDelay }: AddBulkSkyfunnelSesRouteParamType,
+    { campaignOrg, emails, interval, batchDelay, includeDelay }: AddBulkSkyfunnelSesRouteParamType,
     prioritySlug: string = DefaultPrioritySlug,
   ) {
     if (!emails.length || !emails[0]?.emailCampaignId) {
@@ -215,9 +211,8 @@ class SkyFunnelSESQueue extends BaseEmailQueue {
     }
 
     const priorityNumber = getPriority(prioritySlug);
-
     const jobs = emails.map((email, index) => {
-      const delay = batchDelay + (index * interval * 1000);
+      const delay = batchDelay + index * (includeDelay ? generateRandomDelay(interval) : interval * 1000);
       const jobId = generateJobId(email.emailCampaignId, email.id, "SES");
 
       return {
@@ -260,7 +255,7 @@ class SMTPQueue extends BaseEmailQueue {
   }
 
   async addBulkEmailsToQueue(
-    { campaignOrg, emails, interval, smtpCredentials, batchDelay }: AddBulkSMTPRouteParamType,
+    { campaignOrg, emails, interval, smtpCredentials, batchDelay, includeDelay }: AddBulkSMTPRouteParamType,
     prioritySlug: string = DefaultPrioritySlug,
   ) {
     if (!emails.length || !emails[0]?.emailCampaignId) {
@@ -275,7 +270,7 @@ class SMTPQueue extends BaseEmailQueue {
     const priorityNumber = getPriority(prioritySlug);
 
     const jobs = emails.map((email, index) => {
-      const delay = batchDelay + (index * interval * 1000);
+      const delay = batchDelay + index * (includeDelay ? generateRandomDelay(interval) : interval * 1000);
       const jobId = generateJobId(email.emailCampaignId, email.id, "SMTP");
 
       return {
@@ -287,7 +282,6 @@ class SMTPQueue extends BaseEmailQueue {
 
     await emailQueue.addBulk(jobs);
   }
-
 
   async addEmailToQueue(
     { email, campaignOrg, smtpCredentials }: AddSMTPRouteParamsType,

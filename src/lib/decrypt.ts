@@ -18,7 +18,6 @@ export function decryptToken(encryptedText: string): string {
   return decrypted.toString();
 }
 
-
 export function encryptToken(text: string): string {
   if (!text) throw new AppError("BAD_REQUEST", "Password for sender identity not provided");
   if (!process.env.ENCRYPTION_SECRET) throw new Error("ENCRYPTION_SECRET is required for encryption");

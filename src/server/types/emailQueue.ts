@@ -1,6 +1,21 @@
 import { BulkJobOptions } from "bullmq";
 import z from "zod";
 
+const isValidTimeFormatRefine = (
+  val: string | null,
+  ctx: z.RefinementCtx,
+  config: { path: string[]; message: string },
+) => {
+  if (!val) return true;
+  if (val.split(":").length !== 2) {
+    return ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: config.message,
+      path: config.path,
+    });
+  }
+};
+
 export const EmailSchema = z.object({
   id: z.string(),
   leadId: z.string(),
@@ -10,6 +25,28 @@ export const EmailSchema = z.object({
   leadEmail: z.string(),
   senderId: z.string(),
 
+  startTimeInUTC: z
+    .string()
+    .nullable()
+    .superRefine((val, ctx) =>
+      isValidTimeFormatRefine(val, ctx, {
+        path: ["startTimeInUTC"],
+        message: "Invalid start time format must be like HH:mm",
+      }),
+    ),
+
+  endTimeInUTC: z
+    .string()
+    .nullable()
+    .superRefine((val, ctx) =>
+      isValidTimeFormatRefine(val, ctx, {
+        path: ["endTimeInUTC"],
+        message: "Invalid end time format must be like HH:mm",
+      }),
+    ),
+
+  activeDays: z.array(z.enum(["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"])),
+  timezone: z.string(),
   isSentMessage: z.boolean(),
   isRead: z.boolean(),
   status: z.string(),
@@ -26,6 +63,7 @@ export const AddBulkSkyfunnelSesRouteParamsSchema = z.object({
   batchDelay: z.number(),
   interval: z.number(),
   priority: z.string().optional(),
+  includeDelay: z.boolean(),
 });
 
 export const AddSESEmailRouteParamsSchema = z.object({
