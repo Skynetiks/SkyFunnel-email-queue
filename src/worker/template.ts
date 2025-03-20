@@ -1,10 +1,9 @@
 import { TSubscriptionType } from "../lib/email";
 
 export const getFooter = (organizationName: string, leadId: string, subscriptionType: TSubscriptionType) => {
+  const INCLUDE_SKYFUNNEL_BRANDING = ["FREE", "BASIC"];
 
-    const INCLUDE_SKYFUNNEL_BRANDING = ["FREE", "BASIC"];
-
-    return `
+  return `
             <div style="font-size:16px;padding:16px 24px 16px 24px; color: #737373;">
                 <p style="text-align:center; font-size:12px">
                     Copyright (C) ${new Date().getFullYear()} ${organizationName}. All rights reserved.
@@ -22,7 +21,7 @@ export const getFooter = (organizationName: string, leadId: string, subscription
 };
 
 export const getHeader = (campaignId: string, emailId: string) => {
-    return `
+  return `
     <div>
     <img src="${process.env.MAIN_APP_BASE_URL}/api/email-track-open?campaignId=${campaignId}&emailId=${emailId}" alt="" style="display: none;" width="1" height="1" />
     </div>`;

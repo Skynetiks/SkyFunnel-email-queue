@@ -129,63 +129,63 @@ class BaseEmailQueue {
     return jobsToCancel.length;
   }
 
-  async pauseCampaign(campaignId: string) {
-    const redisClient = await getRedisConnection();
-    if (!redisClient) {
-      throw new AppError("INTERNAL_SERVER_ERROR", "Redis not initialized Successfully", false, "HIGH");
-    }
+  // async pauseCampaign(campaignId: string) {
+  //   const redisClient = await getRedisConnection();
+  //   if (!redisClient) {
+  //     throw new AppError("INTERNAL_SERVER_ERROR", "Redis not initialized Successfully", false, "HIGH");
+  //   }
 
-    const isPaused = await this.isCampaignPaused(campaignId);
-    if (isPaused) {
-      throw new AppError("BAD_REQUEST", "Campaign is already paused");
-    }
+  //   const isPaused = await this.isCampaignPaused(campaignId);
+  //   if (isPaused) {
+  //     throw new AppError("BAD_REQUEST", "Campaign is already paused");
+  //   }
 
-    const response = await redisClient.sadd(PAUSE_CAMPAIGN_LIST_KEY, campaignId);
-    if (!response) {
-      throw new AppError("INTERNAL_SERVER_ERROR", "Something Went Wrong while pausing campaign", false, "HIGH");
-    }
+  //   const response = await redisClient.sadd(PAUSE_CAMPAIGN_LIST_KEY, campaignId);
+  //   if (!response) {
+  //     throw new AppError("INTERNAL_SERVER_ERROR", "Something Went Wrong while pausing campaign", false, "HIGH");
+  //   }
 
-    return true;
-  }
+  //   return true;
+  // }
 
-  async resumeCampaign(campaignId: string) {
-    const redisClient = await getRedisConnection();
-    if (!redisClient) {
-      throw new AppError("INTERNAL_SERVER_ERROR", "Redis not initialized Successfully", false, "HIGH");
-    }
+  // async resumeCampaign(campaignId: string) {
+  //   const redisClient = await getRedisConnection();
+  //   if (!redisClient) {
+  //     throw new AppError("INTERNAL_SERVER_ERROR", "Redis not initialized Successfully", false, "HIGH");
+  //   }
 
-    const isPaused = await this.isCampaignPaused(campaignId);
-    if (!isPaused) {
-      throw new AppError("BAD_REQUEST", "Campaign is not paused");
-    }
+  //   const isPaused = await this.isCampaignPaused(campaignId);
+  //   if (!isPaused) {
+  //     throw new AppError("BAD_REQUEST", "Campaign is not paused");
+  //   }
 
-    const response = await redisClient.srem(PAUSE_CAMPAIGN_LIST_KEY, campaignId);
-    if (!response) {
-      throw new AppError("INTERNAL_SERVER_ERROR", "Something Went Wrong while resuming campaign", false, "HIGH");
-    }
+  //   const response = await redisClient.srem(PAUSE_CAMPAIGN_LIST_KEY, campaignId);
+  //   if (!response) {
+  //     throw new AppError("INTERNAL_SERVER_ERROR", "Something Went Wrong while resuming campaign", false, "HIGH");
+  //   }
 
-    return true;
-  }
+  //   return true;
+  // }
 
-  async getPausedCampaigns() {
-    const redisClient = await getRedisConnection();
-    if (!redisClient) {
-      throw new AppError("INTERNAL_SERVER_ERROR", "Redis not initialized Successfully", false, "HIGH");
-    }
+  // async getPausedCampaigns() {
+  //   const redisClient = await getRedisConnection();
+  //   if (!redisClient) {
+  //     throw new AppError("INTERNAL_SERVER_ERROR", "Redis not initialized Successfully", false, "HIGH");
+  //   }
 
-    const pausedCampaigns = await redisClient.smembers(PAUSE_CAMPAIGN_LIST_KEY);
-    return pausedCampaigns;
-  }
+  //   const pausedCampaigns = await redisClient.smembers(PAUSE_CAMPAIGN_LIST_KEY);
+  //   return pausedCampaigns;
+  // }
 
-  async isCampaignPaused(campaignId: string) {
-    const redisClient = await getRedisConnection();
-    if (!redisClient) {
-      throw new AppError("INTERNAL_SERVER_ERROR", "Redis not initialized Successfully", false, "HIGH");
-    }
+  // async isCampaignPaused(campaignId: string) {
+  //   const redisClient = await getRedisConnection();
+  //   if (!redisClient) {
+  //     throw new AppError("INTERNAL_SERVER_ERROR", "Redis not initialized Successfully", false, "HIGH");
+  //   }
 
-    const isPaused = await redisClient.sismember(PAUSE_CAMPAIGN_LIST_KEY, campaignId);
-    return !!isPaused;
-  }
+  //   const isPaused = await redisClient.sismember(PAUSE_CAMPAIGN_LIST_KEY, campaignId);
+  //   return !!isPaused;
+  // }
 }
 
 class SkyFunnelSESQueue extends BaseEmailQueue {
@@ -212,12 +212,13 @@ class SkyFunnelSESQueue extends BaseEmailQueue {
 
     const priorityNumber = getPriority(prioritySlug);
     const jobs = emails.map((email, index) => {
-      const delay = batchDelay + index * (includeDelay ? generateRandomDelay(interval) : interval * 1000);
+      const actualInterval = includeDelay ? generateRandomDelay(interval) : interval * 1000;
+      const delay = batchDelay + index * actualInterval;
       const jobId = generateJobId(email.emailCampaignId, email.id, "SES");
 
       return {
         name: email.id,
-        data: { email, campaignOrg },
+        data: { email, campaignOrg, actualInterval },
         opts: { ...DEFAULT_JOB_OPTIONS, delay, jobId, priority: priorityNumber },
       };
     }) satisfies SESJobOptions;
@@ -270,12 +271,13 @@ class SMTPQueue extends BaseEmailQueue {
     const priorityNumber = getPriority(prioritySlug);
 
     const jobs = emails.map((email, index) => {
-      const delay = batchDelay + index * (includeDelay ? generateRandomDelay(interval) : interval * 1000);
+      const actualInterval = includeDelay ? generateRandomDelay(interval) : interval * 1000;
+      const delay = batchDelay + index * actualInterval;
       const jobId = generateJobId(email.emailCampaignId, email.id, "SMTP");
 
       return {
         name: email.id,
-        data: { email, campaignOrg, smtpCredentials },
+        data: { email, campaignOrg, smtpCredentials, actualInterval },
         opts: { ...DEFAULT_JOB_OPTIONS, delay, jobId, priority: priorityNumber },
       };
     }) satisfies SMTPJobOptions;

@@ -1,4 +1,3 @@
-import { skyfunnelSesQueue } from "./../server/emails";
 import { Job, Worker } from "bullmq";
 import { QUEUE_CONFIG, SES_SKYFUNNEL_EMAIL_QUEUE_KEY } from "../config";
 import { query } from "../lib/db";
@@ -7,7 +6,14 @@ import { AppError, errorHandler } from "../lib/errorHandler";
 import { cache__getCampaignById, cache__getOrganizationSubscription, getSuppressedEmail } from "../db/emailQueries";
 import { getEmailBody } from "../lib/email";
 import { sendEmailSES } from "../lib/aws";
-import { Days, Debug, generateJobId, getDelayedJobId, isActiveDay, isWithinPeriod } from "../lib/utils";
+import {
+  Days,
+  Debug,
+  delayAllSkyfCampaignJobsTillNextValidTime,
+  getNextActiveTime,
+  isActiveDay,
+  isWithinPeriod,
+} from "../lib/utils";
 import { usageRedisStore } from "../lib/usageRedisStore";
 
 const handleJob = async (job: Job) => {
@@ -20,23 +26,17 @@ const handleJob = async (job: Job) => {
     }
 
     const { email, campaignOrg } = validatedData.data;
-    const isPaused = await skyfunnelSesQueue.isCampaignPaused(email.emailCampaignId);
-    console.log("isPaused", isPaused);
-    const isActiveDayValue = isActiveDay(email.activeDays as Days[], email.timezone);
-    if (isPaused || !isWithinPeriod(email.startTimeInUTC, email.endTimeInUTC) || !isActiveDayValue) {
-      let DELAY_TIME = 1000 * QUEUE_CONFIG.delayAfterPauseInSeconds;
-      const ONE_DAY_IN_MS = 86400000;
-      if (!isActiveDayValue) DELAY_TIME = ONE_DAY_IN_MS;
+    const { startTimeInUTC, endTimeInUTC, activeDays, timezone } = email;
 
-      try {
-        const queue = skyfunnelSesQueue.getQueue();
-        const newJobId = getDelayedJobId(job.id || generateJobId(email.emailCampaignId, email.id, "SES"));
-        await queue.add(email.id, data, { ...job.opts, delay: DELAY_TIME, jobId: newJobId });
-        console.log(`[SKYFUNNEL_WORKER] New delayed job added to queue with a delay of ${DELAY_TIME} ms`);
-      } catch (moveError) {
-        console.error("[SKYFUNNEL_WORKER] Failed to move job to delayed queue", moveError);
-      }
+    const isActiveDayValue = isActiveDay(activeDays as Days[], timezone);
+    const isWithinTimeRange = isWithinPeriod(startTimeInUTC, endTimeInUTC);
 
+    if (!isWithinTimeRange || !isActiveDayValue) {
+      const nextActiveDateTime = getNextActiveTime(activeDays as Days[], startTimeInUTC!);
+      console.log(
+        `[SKYFUNNEL_WORKER] Out-of-time job detected. Rescheduling all jobs to ${nextActiveDateTime.toFormat("yyyy-MM-dd HH:mm:ss")}`,
+      );
+      await delayAllSkyfCampaignJobsTillNextValidTime(job, nextActiveDateTime);
       return;
     }
 

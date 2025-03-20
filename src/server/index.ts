@@ -158,49 +158,49 @@ app.post("/smtp/cancel-campaign", async (req, res, next) => {
   }
 });
 
-app.post("/smtp/pause-campaign", async (req, res, next) => {
-  try {
-    if (!req.body.campaignId) {
-      throw new AppError("BAD_REQUEST", "campaignId is required");
-    }
+// app.post("/smtp/pause-campaign", async (req, res, next) => {
+//   try {
+//     if (!req.body.campaignId) {
+//       throw new AppError("BAD_REQUEST", "campaignId is required");
+//     }
 
-    const { campaignId } = req.body;
+//     const { campaignId } = req.body;
 
-    const isSuccess = await smtpQueue.pauseCampaign(campaignId);
-    if (!isSuccess) {
-      throw new AppError("NOT_FOUND", "Campaign is not paused");
-    }
+//     const isSuccess = await smtpQueue.pauseCampaign(campaignId);
+//     if (!isSuccess) {
+//       throw new AppError("NOT_FOUND", "Campaign is not paused");
+//     }
 
-    res.status(200).json({
-      success: true,
-      message: "Campaign is paused",
-    });
-  } catch (error) {
-    next(error);
-  }
-});
+//     res.status(200).json({
+//       success: true,
+//       message: "Campaign is paused",
+//     });
+//   } catch (error) {
+//     next(error);
+//   }
+// });
 
-app.post("/smtp/resume-campaign", async (req, res, next) => {
-  try {
-    if (!req.body.campaignId) {
-      throw new AppError("BAD_REQUEST", "campaignId is required");
-    }
+// app.post("/smtp/resume-campaign", async (req, res, next) => {
+//   try {
+//     if (!req.body.campaignId) {
+//       throw new AppError("BAD_REQUEST", "campaignId is required");
+//     }
 
-    const { campaignId } = req.body;
+//     const { campaignId } = req.body;
 
-    const isSuccess = await smtpQueue.resumeCampaign(campaignId);
-    if (!isSuccess) {
-      throw new AppError("NOT_FOUND", "Campaign is not resumed");
-    }
+//     const isSuccess = await smtpQueue.resumeCampaign(campaignId);
+//     if (!isSuccess) {
+//       throw new AppError("NOT_FOUND", "Campaign is not resumed");
+//     }
 
-    res.status(200).json({
-      success: true,
-      message: "Campaign is resumed",
-    });
-  } catch (error) {
-    next(error);
-  }
-});
+//     res.status(200).json({
+//       success: true,
+//       message: "Campaign is resumed",
+//     });
+//   } catch (error) {
+//     next(error);
+//   }
+// });
 
 // ******************************************************************************************************************************************
 // ***************************************************** Skyfunnel Ses ROUTE ****************************************************************
@@ -291,49 +291,49 @@ app.post("/ses/cancel-campaign", async (req, res, next) => {
   }
 });
 
-app.post("/ses/pause-campaign", async (req, res, next) => {
-  try {
-    if (!req.body.campaignId) {
-      throw new AppError("BAD_REQUEST", "campaignId is required");
-    }
+// app.post("/ses/pause-campaign", async (req, res, next) => {
+//   try {
+//     if (!req.body.campaignId) {
+//       throw new AppError("BAD_REQUEST", "campaignId is required");
+//     }
 
-    const { campaignId } = req.body;
+//     const { campaignId } = req.body;
 
-    const isSuccess = await skyfunnelSesQueue.pauseCampaign(campaignId);
-    if (!isSuccess) {
-      throw new AppError("NOT_FOUND", "Campaign is not paused");
-    }
+//     const isSuccess = await skyfunnelSesQueue.pauseCampaign(campaignId);
+//     if (!isSuccess) {
+//       throw new AppError("NOT_FOUND", "Campaign is not paused");
+//     }
 
-    res.status(200).json({
-      success: true,
-      message: "Campaign is paused",
-    });
-  } catch (error) {
-    next(error);
-  }
-});
+//     res.status(200).json({
+//       success: true,
+//       message: "Campaign is paused",
+//     });
+//   } catch (error) {
+//     next(error);
+//   }
+// });
 
-app.post("/ses/resume-campaign", async (req, res, next) => {
-  try {
-    if (!req.body.campaignId) {
-      throw new AppError("BAD_REQUEST", "campaignId is required");
-    }
+// app.post("/ses/resume-campaign", async (req, res, next) => {
+//   try {
+//     if (!req.body.campaignId) {
+//       throw new AppError("BAD_REQUEST", "campaignId is required");
+//     }
 
-    const { campaignId } = req.body;
+//     const { campaignId } = req.body;
 
-    const isSuccess = await skyfunnelSesQueue.resumeCampaign(campaignId);
-    if (!isSuccess) {
-      throw new AppError("NOT_FOUND", "Campaign is not resumed");
-    }
+//     const isSuccess = await skyfunnelSesQueue.resumeCampaign(campaignId);
+//     if (!isSuccess) {
+//       throw new AppError("NOT_FOUND", "Campaign is not resumed");
+//     }
 
-    res.status(200).json({
-      success: true,
-      message: "Campaign is resumed",
-    });
-  } catch (error) {
-    next(error);
-  }
-});
+//     res.status(200).json({
+//       success: true,
+//       message: "Campaign is resumed",
+//     });
+//   } catch (error) {
+//     next(error);
+//   }
+// });
 
 // ******************************************************************************************************************************************
 // ***************************************************** ADMIN ROUTE ************************************************************************
