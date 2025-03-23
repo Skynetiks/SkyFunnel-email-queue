@@ -2,10 +2,16 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
-			"name": "Debug",
+			"name": "Debug Worker",
 			"type": "node-terminal",
 			"request": "launch",
 			"command": "npx tsx src/worker/worker.ts"
+		},
+		{
+			"name": "Debug Server",
+			"type": "node-terminal",
+			"request": "launch",
+			"command": "npx tsx src/server/index.ts"
 		},
 	]
 }
