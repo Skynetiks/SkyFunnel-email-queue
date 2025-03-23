@@ -214,10 +214,9 @@ export async function delayAllSkyfCampaignJobsTillNextValidTime(currentJob: Job,
       return Promise.resolve(); // Skip this job, but maintain structure
     }
 
-    const delayedTimestamp = new Date(Date.now() + delay).getTime();
     console.log(`[SKYFUNNEL_WORKER] Rescheduled Job ${job.id} to ${lastScheduledTime.toFormat("yyyy-MM-dd HH:mm:ss")}`);
 
-    return job.changeDelay(delayedTimestamp, undefined);
+    return job.changeDelay(delay, undefined);
   });
 
   const results = await Promise.allSettled(delayPromises);
@@ -264,11 +263,9 @@ export async function delayAllSMTPCampaignJobsTillNextValidTime(currentJob: Job,
       console.warn(`[SMTP_WORKER] Skipping job ${job.id}, as the delay is negative.`);
       return Promise.resolve(); // Skip this job, but maintain structure
     }
-
-    const delayedTimestamp = new Date(Date.now() + delay).getTime();
     console.log(`[SMTP_WORKER] Rescheduled Job ${job.id} to ${lastScheduledTime.toFormat("yyyy-MM-dd HH:mm:ss")}`);
 
-    return job.changeDelay(delayedTimestamp, undefined);
+    return job.changeDelay(delay, undefined);
   });
 
   const results = await Promise.allSettled(delayPromises);
