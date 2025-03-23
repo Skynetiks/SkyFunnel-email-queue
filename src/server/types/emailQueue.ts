@@ -24,7 +24,11 @@ export const EmailSchema = z.object({
   leadLastName: z.string().optional().nullable(),
   leadEmail: z.string(),
   senderId: z.string(),
-
+  leadCompanyName: z.string().nullable(),
+  isSentMessage: z.boolean(),
+  isRead: z.boolean(),
+  status: z.string(),
+  timestamp: z.string().datetime().optional(),
   startTimeInUTC: z
     .string()
     .nullable()
@@ -46,12 +50,7 @@ export const EmailSchema = z.object({
     ),
 
   activeDays: z.array(z.enum(["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"])),
-  timezone: z.string(),
-  isSentMessage: z.boolean(),
-  isRead: z.boolean(),
-  status: z.string(),
-  timeStamp: z.string().datetime().optional(),
-  leadCompanyName: z.string().nullable(),
+  timezone: z.string().nullable(),
 });
 
 export const AddBulkSkyfunnelSesRouteParamsSchema = z.object({

@@ -1,11 +1,17 @@
-import { smtpQueue } from "./../server/emails";
 import { Job, Worker } from "bullmq";
 import { QUEUE_CONFIG, SMTP_EMAIL_QUEUE_KEY } from "../config";
 import { query } from "../lib/db";
 import { AppError, errorHandler } from "../lib/errorHandler";
 import { cache__getCampaignById, cache__getOrganizationSubscription, getSuppressedEmail } from "../db/emailQueries";
 import { getEmailBody } from "../lib/email";
-import { Days, Debug, generateJobId, getDelayedJobId, isActiveDay, isWithinPeriod } from "../lib/utils";
+import {
+  Days,
+  Debug,
+  delayAllSMTPCampaignJobsTillNextValidTime,
+  getNextActiveTime,
+  isActiveDay,
+  isWithinPeriod,
+} from "../lib/utils";
 import { AddSMTPRouteParamsSchema, AddSMTPRouteParamsType, SMTPCredentials } from "../server/types/smtpQueue";
 import { sendSMTPEmail, smtpErrorHandler } from "../lib/smtp";
 import { Email } from "../server/types/emailQueue";
@@ -22,29 +28,17 @@ const handleJob = async (job: Job) => {
     }
 
     const { email, campaignOrg, smtpCredentials } = validatedData.data;
-    const isPaused = await smtpQueue.isCampaignPaused(email.emailCampaignId);
-    const isWithinPeriodValue = isWithinPeriod(email.startTimeInUTC, email.endTimeInUTC);
+    const { startTimeInUTC, endTimeInUTC, activeDays, timezone } = email;
 
-    const isActiveDayValue = isActiveDay(email.activeDays as Days[], email.timezone);
-    Debug.devLog(isPaused ? "[SMTP_WORKER] Campaign is paused" : "[SMTP_WORKER] Campaign is not paused");
+    const isWithinPeriodValue = isWithinPeriod(startTimeInUTC, endTimeInUTC);
+    const isActiveDayValue = isActiveDay(activeDays as Days[], timezone);
 
-    if (isPaused || !isWithinPeriodValue || !isActiveDayValue) {
-      // TODO: calculate delay time based on the next start time
-      let DELAY_TIME = 1000 * QUEUE_CONFIG.delayAfterPauseInSeconds;
-      const ONE_DAY_IN_MS = 86400000;
-      if (!isActiveDayValue) DELAY_TIME = ONE_DAY_IN_MS;
-
-      if (!isWithinPeriodValue) Debug.devLog("[SMTP_WORKER] Delaying the campaign because it is not within the period");
-
-      try {
-        const queue = smtpQueue.getQueue();
-        const newJobId = getDelayedJobId(job.id || generateJobId(email.emailCampaignId, email.id, "SMTP"));
-        await queue.add(email.id, data, { ...job.opts, delay: DELAY_TIME, jobId: newJobId });
-        console.log(`[SMTP_WORKER] New delayed job added to queue with a delay of ${DELAY_TIME} ms`);
-      } catch (moveError) {
-        console.error("[SMTP_WORKER] Failed to move job to delayed queue", moveError);
-      }
-
+    if (!isWithinPeriodValue || !isActiveDayValue) {
+      const nextActiveDateTime = getNextActiveTime(activeDays as Days[], startTimeInUTC!);
+      console.log(
+        `[SMTP_WORKER] Out-of-time job detected. Rescheduling all jobs to ${nextActiveDateTime.toFormat("yyyy-MM-dd HH:mm:ss")}`,
+      );
+      await delayAllSMTPCampaignJobsTillNextValidTime(job, nextActiveDateTime);
       return;
     }
 

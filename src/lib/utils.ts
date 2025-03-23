@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { DateTime } from "luxon";
+import { DateTime, Info } from "luxon";
 import dotenv from "dotenv";
+import { skyfunnelSesQueue, smtpQueue } from "../server/emails";
+import { Job } from "bullmq";
 dotenv.config();
 
 /**
@@ -48,6 +50,7 @@ export function replaceUrlsInEmailHtml(campaign: { id: string; bodyHTML: string 
 }
 
 export const isDevelopment = process.env.NODE_ENV === "development";
+
 export const getDelayedJobId = (jobId: string) => {
   const baseJobId = jobId?.split("-delayed")[0];
   const delayCountMatch = jobId?.match(/-delayed-(\d+)$/);
@@ -137,3 +140,138 @@ export const generateRandomDelay = (currentInterval: number) => {
   const newRandomDelay = currentInterval * 1000 + randomDelay * 1000;
   return newRandomDelay;
 };
+
+export function getNextActiveTime(
+  activeDays: Days[],
+  startTimeUTC: string
+): DateTime {
+  const now = DateTime.utc();
+
+  // Map `Days` enum to Luxon's numeric weekdays (1=Mon, 7=Sun)
+  const dayNames = Info.weekdays('long'); // ["Monday", "Tuesday", ..., "Sunday"]
+  const activeDaysIndex = activeDays.map(
+    (day) => dayNames.indexOf(day.charAt(0) + day.slice(1).toLowerCase()) + 1
+  );
+
+  // Extract start hour & minute
+  const [startHour, startMinute] = startTimeUTC.split(':').map(Number);
+  const todayStart = now.set({
+    hour: startHour,
+    minute: startMinute,
+    second: 0,
+  });
+
+  // If today is an active day & it's before start time, schedule for today
+  if (activeDaysIndex.includes(now.weekday) && now < todayStart) {
+    return todayStart;
+  }
+
+  // Find the next available active day
+  let daysToAdd = 1;
+  while (!activeDaysIndex.includes(now.plus({ days: daysToAdd }).weekday)) {
+    daysToAdd++;
+  }
+
+  return now
+    .plus({ days: daysToAdd })
+    .set({ hour: startHour, minute: startMinute, second: 0 });
+}
+
+export async function delayAllSkyfCampaignJobsTillNextValidTime(currentJob: Job, nextActiveTime: DateTime) {
+  const queue = skyfunnelSesQueue.getQueue();
+  const jobs = await queue.getJobs(["delayed", "waiting"]);
+
+  const jobsToReschedule = jobs.filter((job) => job.data.email.campaignId === currentJob.data.email.campaignId);
+
+  if (jobs.length === 0) {
+    console.log("[SKYFUNNEL_WORKER] No jobs found, only rescheduling the current job.");
+  }
+  let lastScheduledTime = nextActiveTime;
+  const nextValidTimeDelay = lastScheduledTime.toMillis() - DateTime.now().toMillis();
+  const newJobId = getDelayedJobId(
+    currentJob.id || generateJobId(currentJob.data.email.emailCampaignId, currentJob.data.email.id, "SES"),
+  );
+  await queue.add(currentJob.data.email.id, currentJob.data, {
+    ...currentJob.opts,
+    delay: nextValidTimeDelay,
+    jobId: newJobId,
+  });
+  console.log(
+    `[SKYFUNNEL_WORKER] New delayed job added to queue with a delay of ${nextValidTimeDelay} ms to be sent at ${lastScheduledTime.toFormat("yyyy-MM-dd HH:mm:ss")}`,
+  );
+
+  // Sort jobs by their original intended execution time if available
+  jobs.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+
+  const delayPromises = jobsToReschedule.map(async (job) => {
+    lastScheduledTime = lastScheduledTime.plus({ milliseconds: job.data.actualInterval });
+
+    const delay = lastScheduledTime.toMillis() - DateTime.now().toMillis();
+
+    // Ensure delay is non-negative
+    if (delay < 0) {
+      console.warn(`[SKYFUNNEL_WORKER] Skipping job ${job.id}, as the delay is negative.`);
+      return Promise.resolve(); // Skip this job, but maintain structure
+    }
+
+    console.log(`[SKYFUNNEL_WORKER] Rescheduled Job ${job.id} to ${lastScheduledTime.toFormat("yyyy-MM-dd HH:mm:ss")}`);
+
+    return job.changeDelay(delay, undefined);
+  });
+
+  const results = await Promise.allSettled(delayPromises);
+
+  const failedJobs = results.filter((result) => result.status === "rejected");
+  failedJobs.forEach((result, index) => {
+    console.error(`Failed to delay job ${jobsToReschedule[index]?.id}:`, result.reason);
+  });
+}
+
+export async function delayAllSMTPCampaignJobsTillNextValidTime(currentJob: Job, nextActiveTime: DateTime) {
+  const queue = smtpQueue.getQueue();
+  const jobs = await queue.getJobs(["delayed", "waiting"]);
+
+  const jobsToReschedule = jobs.filter((job) => job.data.email.campaignId === currentJob.data.email.campaignId);
+
+  if (jobs.length === 0) {
+    console.log("[SMTP_WORKER] No jobs found, only rescheduling the current job.");
+  }
+  let lastScheduledTime = nextActiveTime;
+  const nextValidTimeDelay = lastScheduledTime.toMillis() - DateTime.now().toMillis();
+  const newJobId = getDelayedJobId(
+    currentJob.id || generateJobId(currentJob.data.email.emailCampaignId, currentJob.data.email.id, "SES"),
+  );
+  await queue.add(currentJob.data.email.id, currentJob.data, {
+    ...currentJob.opts,
+    delay: nextValidTimeDelay,
+    jobId: newJobId,
+  });
+  console.log(
+    `[SMTP_WORKER] New delayed job added to queue with a delay of ${nextValidTimeDelay} ms to be sent at ${lastScheduledTime.toFormat("yyyy-MM-dd HH:mm:ss")}`,
+  );
+
+  // Sort jobs by their original intended execution time if available
+  jobs.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+
+  const delayPromises = jobsToReschedule.map(async (job) => {
+    lastScheduledTime = lastScheduledTime.plus({ milliseconds: job.data.actualInterval });
+
+    const delay = lastScheduledTime.toMillis() - DateTime.now().toMillis();
+
+    // Ensure delay is non-negative
+    if (delay < 0) {
+      console.warn(`[SMTP_WORKER] Skipping job ${job.id}, as the delay is negative.`);
+      return Promise.resolve(); // Skip this job, but maintain structure
+    }
+    console.log(`[SMTP_WORKER] Rescheduled Job ${job.id} to ${lastScheduledTime.toFormat("yyyy-MM-dd HH:mm:ss")}`);
+
+    return job.changeDelay(delay, undefined);
+  });
+
+  const results = await Promise.allSettled(delayPromises);
+
+  const failedJobs = results.filter((result) => result.status === "rejected");
+  failedJobs.forEach((result, index) => {
+    console.error(`Failed to delay job ${jobsToReschedule[index]?.id}:`, result.reason);
+  });
+}
