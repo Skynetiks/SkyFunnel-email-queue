@@ -127,6 +127,7 @@ export enum Days {
 }
 export function isActiveDay(activeDays: Days[], timezone: string = "UTC"): boolean {
   // Use luxon to get the current day in the specified timezone
+  if(activeDays.length === 0) return true;
   const today = DateTime.now().setZone(timezone);
   const todayDayName = today.toFormat("cccc").toUpperCase();
 
