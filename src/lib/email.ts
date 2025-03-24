@@ -7,7 +7,6 @@ type Params = {
   campaignId: string;
   rawBodyHTML: string;
   emailId: string;
-
   leadFirstName: string;
   leadLastName: string;
   leadEmail: string;
@@ -16,6 +15,7 @@ type Params = {
   subscriptionType: TSubscriptionType;
   organizationName: string;
 };
+
 export const getEmailBody = (data: Params) => {
   const trackedEmailBodyHTML = replaceUrlsInEmailHtml(
     { id: data.campaignId, bodyHTML: data.rawBodyHTML },
@@ -32,4 +32,21 @@ export const getEmailBody = (data: Params) => {
   const header = getHeader(data.campaignId, data.emailId);
 
   return { emailBodyHTML, footer, header };
+};
+
+interface GetEmailSubjectParams {
+  subject: string;
+  leadFirstName: string;
+  leadLastName: string;
+  leadEmail: string;
+  leadCompanyName: string;
+}
+
+export const getEmailSubject = (data: GetEmailSubjectParams) => {
+  const emailSubject = data.subject
+    .replaceAll("[[firstname]]", data.leadFirstName)
+    .replaceAll("[[lastname]]", data.leadLastName)
+    .replaceAll("[[email]]", data.leadEmail)
+    .replaceAll("[[companyname]]", data.leadCompanyName);
+  return emailSubject;
 };

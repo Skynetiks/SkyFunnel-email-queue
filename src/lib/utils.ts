@@ -141,20 +141,15 @@ export const generateRandomDelay = (currentInterval: number) => {
   return newRandomDelay;
 };
 
-export function getNextActiveTime(
-  activeDays: Days[],
-  startTimeUTC: string
-): DateTime {
+export function getNextActiveTime(activeDays: Days[], startTimeUTC: string): DateTime {
   const now = DateTime.utc();
 
   // Map `Days` enum to Luxon's numeric weekdays (1=Mon, 7=Sun)
-  const dayNames = Info.weekdays('long'); // ["Monday", "Tuesday", ..., "Sunday"]
-  const activeDaysIndex = activeDays.map(
-    (day) => dayNames.indexOf(day.charAt(0) + day.slice(1).toLowerCase()) + 1
-  );
+  const dayNames = Info.weekdays("long"); // ["Monday", "Tuesday", ..., "Sunday"]
+  const activeDaysIndex = activeDays.map((day) => dayNames.indexOf(day.charAt(0) + day.slice(1).toLowerCase()) + 1);
 
   // Extract start hour & minute
-  const [startHour, startMinute] = startTimeUTC.split(':').map(Number);
+  const [startHour, startMinute] = startTimeUTC.split(":").map(Number);
   const todayStart = now.set({
     hour: startHour,
     minute: startMinute,
@@ -172,9 +167,7 @@ export function getNextActiveTime(
     daysToAdd++;
   }
 
-  return now
-    .plus({ days: daysToAdd })
-    .set({ hour: startHour, minute: startMinute, second: 0 });
+  return now.plus({ days: daysToAdd }).set({ hour: startHour, minute: startMinute, second: 0 });
 }
 
 export async function delayAllSkyfCampaignJobsTillNextValidTime(currentJob: Job, nextActiveTime: DateTime) {
