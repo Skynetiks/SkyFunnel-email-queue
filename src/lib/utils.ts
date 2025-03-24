@@ -175,7 +175,7 @@ export async function delayAllSkyfCampaignJobsTillNextValidTime(currentJob: Job,
   const queue = skyfunnelSesQueue.getQueue();
   const jobs = await queue.getJobs(["delayed", "waiting"]);
 
-  const jobsToReschedule = jobs.filter((job) => job.data.email.campaignId === currentJob.data.email.campaignId);
+  const jobsToReschedule = jobs.filter((job) => job.data.email.emailCampaignId === currentJob.data.email.emailCampaignId);
 
   if (jobs.length === 0) {
     console.log("[SKYFUNNEL_WORKER] No jobs found, only rescheduling the current job.");
@@ -225,7 +225,7 @@ export async function delayAllSMTPCampaignJobsTillNextValidTime(currentJob: Job,
   const queue = smtpQueue.getQueue();
   const jobs = await queue.getJobs(["delayed", "waiting"]);
 
-  const jobsToReschedule = jobs.filter((job) => job.data.email.campaignId === currentJob.data.email.campaignId);
+  const jobsToReschedule = jobs.filter((job) => job.data.email.emailCampaignId === currentJob.data.email.emailCampaignId);
 
   if (jobs.length === 0) {
     console.log("[SMTP_WORKER] No jobs found, only rescheduling the current job.");
