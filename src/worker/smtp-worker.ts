@@ -31,7 +31,7 @@ const handleJob = async (job: Job) => {
     const { startTimeInUTC, endTimeInUTC, activeDays, timezone } = email;
 
     const isWithinPeriodValue = isWithinPeriod(startTimeInUTC, endTimeInUTC);
-    const isActiveDayValue = isActiveDay(activeDays as Days[], timezone);
+    const isActiveDayValue = isActiveDay(activeDays as Days[], timezone ?? undefined);
 
     if (!isWithinPeriodValue || !isActiveDayValue) {
       const nextActiveDateTime = getNextActiveTime(activeDays as Days[], startTimeInUTC!);
