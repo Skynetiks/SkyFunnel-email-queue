@@ -3,7 +3,7 @@ import { QUEUE_CONFIG, SMTP_EMAIL_QUEUE_KEY } from "../config";
 import { query } from "../lib/db";
 import { AppError, errorHandler } from "../lib/errorHandler";
 import { cache__getCampaignById, cache__getOrganizationSubscription, getSuppressedEmail } from "../db/emailQueries";
-import { getEmailBody } from "../lib/email";
+import { getEmailBody, getEmailSubject } from "../lib/email";
 import {
   Days,
   Debug,
@@ -98,6 +98,14 @@ async function sendEmailAndUpdateStatus(
     subscriptionType: organizationSubscription.leadManagementModuleType,
   });
 
+    const emailSubject = getEmailSubject({
+      subject: campaign.subject,
+      leadFirstName: email.leadFirstName || "",
+      leadLastName: email.leadLastName || "",
+      leadEmail: email.leadEmail,
+      leadCompanyName: email.leadCompanyName || "",
+    });
+
   if (suppressedResults) {
     Debug.devLog("UPDATING EMAIL STATUS TO SUPPRESS FOR EMAIL ID: ", email.id);
     await query('UPDATE "Email" SET status = $1 WHERE id = $2', ["SUPPRESS", email.id]);
@@ -121,7 +129,7 @@ async function sendEmailAndUpdateStatus(
         senderName: campaign.senderName,
         body: header + emailBodyHTML + footer,
         recipient: email.leadEmail,
-        subject: campaign.subject,
+        subject: emailSubject,
         replyToEmail: campaign.replyToEmail,
         campaignId: email.emailCampaignId,
       },
