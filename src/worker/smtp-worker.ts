@@ -77,7 +77,7 @@ async function sendEmailAndUpdateStatus(
     );
 
     Promise.all([
-      query('UPDATE "EmailCampaign" SET "status" = "LIMIT" WHERE id = $1', [email.emailCampaignId]),
+      query('UPDATE "EmailCampaign" SET "status" = $1 WHERE id = $2', ["LIMIT",email.emailCampaignId]),
       query('UPDATE "Email" SET status = $1 WHERE id = $2', ["LIMIT", email.id]),
     ]);
     return;
