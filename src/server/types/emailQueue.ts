@@ -25,8 +25,6 @@ export const EmailSchema = z.object({
   leadEmail: z.string(),
   senderId: z.string(),
   leadCompanyName: z.string().nullable(),
-  isSentMessage: z.boolean(),
-  isRead: z.boolean(),
   status: z.string(),
   timestamp: z.string().datetime().optional(),
   startTimeInUTC: z
