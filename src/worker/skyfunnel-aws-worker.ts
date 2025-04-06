@@ -115,7 +115,7 @@ async function sendEmailAndUpdateStatus(email: Email, campaignOrg: { name: strin
   }
 
   const emailSent = await sendEmailSES({
-    senderEmail: campaign.senderEmail,
+    senderEmail: email.senderEmail,
     senderName: campaign.senderName,
     body: header + emailBodyHTML + footer,
     recipient: email.leadEmail,
