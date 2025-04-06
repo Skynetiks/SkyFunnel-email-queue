@@ -166,7 +166,7 @@ const worker = new Worker(SES_SKYFUNNEL_EMAIL_QUEUE_KEY, handleJob, {
 
 worker.on("failed", async (job) => {
   if (job && "id" in job.data.email) {
-    console.log("Updating email status to ERROR");
+    console.log("Updating status to ERROR for email with id " + job.data.email.id);
     await query('UPDATE "Email" SET status = $1 WHERE id = $2', ["ERROR", job.data.email.id]);
   }
 
