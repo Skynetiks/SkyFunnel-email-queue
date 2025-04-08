@@ -218,7 +218,7 @@ app.post("/ses/add-emails", async (req, res, next) => {
     await skyfunnelSesQueue.addBulkEmailsToQueue(bulkEmailData, bulkEmailData.priority || DefaultPrioritySlug);
     res.status(200).json({
       success: true,
-      message: "Emails added to queue",
+      message: `${bulkEmailData.emails.length} emails added to queue`,
     });
   } catch (error) {
     next(error);

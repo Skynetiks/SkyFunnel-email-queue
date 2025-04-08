@@ -22,11 +22,20 @@ export const getEmailBody = (data: Params) => {
     data.emailId,
   );
 
-  const emailBodyHTML = trackedEmailBodyHTML
-    .replaceAll("[[firstname]]", data.leadFirstName)
-    .replaceAll("[[lastname]]", data.leadLastName)
-    .replaceAll("[[email]]", data.leadEmail)
-    .replaceAll("[[companyname]]", data.leadCompanyName);
+  const emailBodyHTML = trackedEmailBodyHTML.replace(/\[\[(\w+)(?:\s*\|\|\s*(.+?))?\]\]/g, (match, key, fallback) => {
+    switch (key.toLowerCase()) {
+      case 'firstname':
+        return data.leadFirstName || fallback || '';
+      case 'lastname':
+        return data.leadLastName || fallback || '';
+      case 'email':
+        return data.leadEmail || fallback || '';
+      case 'companyname':
+        return data.leadCompanyName || fallback || '';
+      default:
+        return fallback || '';
+    }
+  });
 
   const footer = getFooter(data.organizationName, data.leadId, data.subscriptionType);
   const header = getHeader(data.campaignId, data.emailId);
@@ -43,10 +52,21 @@ interface GetEmailSubjectParams {
 }
 
 export const getEmailSubject = (data: GetEmailSubjectParams) => {
-  const emailSubject = data.subject
-    .replaceAll("[[firstname]]", data.leadFirstName)
-    .replaceAll("[[lastname]]", data.leadLastName)
-    .replaceAll("[[email]]", data.leadEmail)
-    .replaceAll("[[companyname]]", data.leadCompanyName);
+  const emailSubject = data.subject.replace(/\[\[(\w+)(?:\s*\|\|\s*(.+?))?\]\]/g, (match, key, fallback) => {
+    switch (key.toLowerCase()) {
+      case 'firstname':
+        return data.leadFirstName || fallback || '';
+      case 'lastname':
+        return data.leadLastName || fallback || '';
+      case 'email':
+        return data.leadEmail || fallback || '';
+      case 'companyname':
+        return data.leadCompanyName || fallback || '';
+      default:
+        return fallback || '';
+    }
+  });
+
   return emailSubject;
+
 };

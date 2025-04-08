@@ -1,2 +1,2 @@
 import "./skyfunnel-aws-worker";
-import "./smtp-worker";
+// import "./smtp-worker";
