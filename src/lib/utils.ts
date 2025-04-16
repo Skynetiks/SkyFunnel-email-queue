@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { DateTime } from "luxon";
+import { DateTime, Info } from "luxon";
 import dotenv from "dotenv";
 import { skyfunnelSesQueue, smtpQueue } from "../server/emails";
 import { Job } from "bullmq";
@@ -127,6 +127,7 @@ export enum Days {
 }
 export function isActiveDay(activeDays: Days[], timezone: string = "UTC"): boolean {
   // Use luxon to get the current day in the specified timezone
+  if(activeDays.length === 0) return true;
   const today = DateTime.now().setZone(timezone);
   const todayDayName = today.toFormat("cccc").toUpperCase();
 
@@ -142,30 +143,39 @@ export const generateRandomDelay = (currentInterval: number) => {
 };
 
 export function getNextActiveTime(activeDays: Days[], startTimeUTC: string): DateTime {
-  const now = DateTime.now();
-  const nextActiveTime = now;
+  const now = DateTime.utc();
 
-  // Convert active days to Luxon-compatible format
-  const activeDaysIndex = activeDays.map((day) => DateTime.fromFormat(day, "cccc").weekday);
+  // Map `Days` enum to Luxon's numeric weekdays (1=Mon, 7=Sun)
+  const dayNames = Info.weekdays("long"); // ["Monday", "Tuesday", ..., "Sunday"]
+  const activeDaysIndex = activeDays.map((day) => dayNames.indexOf(day.charAt(0) + day.slice(1).toLowerCase()) + 1);
+
+  // Extract start hour & minute
+  const [startHour, startMinute] = startTimeUTC.split(":").map(Number);
+  const todayStart = now.set({
+    hour: startHour,
+    minute: startMinute,
+    second: 0,
+  });
+
+  // If today is an active day & it's before start time, schedule for today
+  if (activeDaysIndex.includes(now.weekday) && now < todayStart) {
+    return todayStart;
+  }
 
   // Find the next available active day
   let daysToAdd = 1;
-  while (!activeDaysIndex.includes(nextActiveTime.plus({ days: daysToAdd }).weekday)) {
+  while (!activeDaysIndex.includes(now.plus({ days: daysToAdd }).weekday)) {
     daysToAdd++;
   }
 
-  return now.plus({ days: daysToAdd }).set({
-    hour: Number(startTimeUTC.split(":")[0]),
-    minute: Number(startTimeUTC.split(":")[1]),
-    second: 0,
-  });
+  return now.plus({ days: daysToAdd }).set({ hour: startHour, minute: startMinute, second: 0 });
 }
 
 export async function delayAllSkyfCampaignJobsTillNextValidTime(currentJob: Job, nextActiveTime: DateTime) {
   const queue = skyfunnelSesQueue.getQueue();
   const jobs = await queue.getJobs(["delayed", "waiting"]);
 
-  const jobsToReschedule = jobs.filter((job) => job.data.email.campaignId === currentJob.data.email.campaignId);
+  const jobsToReschedule = jobs.filter((job) => job.data.email.emailCampaignId === currentJob.data.email.emailCampaignId);
 
   if (jobs.length === 0) {
     console.log("[SKYFUNNEL_WORKER] No jobs found, only rescheduling the current job.");
@@ -198,10 +208,9 @@ export async function delayAllSkyfCampaignJobsTillNextValidTime(currentJob: Job,
       return Promise.resolve(); // Skip this job, but maintain structure
     }
 
-    const delayedTimestamp = new Date(Date.now() + delay).getTime();
     console.log(`[SKYFUNNEL_WORKER] Rescheduled Job ${job.id} to ${lastScheduledTime.toFormat("yyyy-MM-dd HH:mm:ss")}`);
 
-    return job.changeDelay(delayedTimestamp, undefined);
+    return job.changeDelay(delay, undefined);
   });
 
   const results = await Promise.allSettled(delayPromises);
@@ -216,7 +225,7 @@ export async function delayAllSMTPCampaignJobsTillNextValidTime(currentJob: Job,
   const queue = smtpQueue.getQueue();
   const jobs = await queue.getJobs(["delayed", "waiting"]);
 
-  const jobsToReschedule = jobs.filter((job) => job.data.email.campaignId === currentJob.data.email.campaignId);
+  const jobsToReschedule = jobs.filter((job) => job.data.email.emailCampaignId === currentJob.data.email.emailCampaignId);
 
   if (jobs.length === 0) {
     console.log("[SMTP_WORKER] No jobs found, only rescheduling the current job.");
@@ -248,11 +257,9 @@ export async function delayAllSMTPCampaignJobsTillNextValidTime(currentJob: Job,
       console.warn(`[SMTP_WORKER] Skipping job ${job.id}, as the delay is negative.`);
       return Promise.resolve(); // Skip this job, but maintain structure
     }
-
-    const delayedTimestamp = new Date(Date.now() + delay).getTime();
     console.log(`[SMTP_WORKER] Rescheduled Job ${job.id} to ${lastScheduledTime.toFormat("yyyy-MM-dd HH:mm:ss")}`);
 
-    return job.changeDelay(delayedTimestamp, undefined);
+    return job.changeDelay(delay, undefined);
   });
 
   const results = await Promise.allSettled(delayPromises);

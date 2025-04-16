@@ -3,7 +3,7 @@ import { QUEUE_CONFIG, SMTP_EMAIL_QUEUE_KEY } from "../config";
 import { query } from "../lib/db";
 import { AppError, errorHandler } from "../lib/errorHandler";
 import { cache__getCampaignById, cache__getOrganizationSubscription, getSuppressedEmail } from "../db/emailQueries";
-import { getEmailBody } from "../lib/email";
+import { getEmailBody, getEmailSubject } from "../lib/email";
 import {
   Days,
   Debug,
@@ -31,7 +31,7 @@ const handleJob = async (job: Job) => {
     const { startTimeInUTC, endTimeInUTC, activeDays, timezone } = email;
 
     const isWithinPeriodValue = isWithinPeriod(startTimeInUTC, endTimeInUTC);
-    const isActiveDayValue = isActiveDay(activeDays as Days[], timezone);
+    const isActiveDayValue = isActiveDay(activeDays as Days[], timezone ?? undefined);
 
     if (!isWithinPeriodValue || !isActiveDayValue) {
       const nextActiveDateTime = getNextActiveTime(activeDays as Days[], startTimeInUTC!);
@@ -77,7 +77,7 @@ async function sendEmailAndUpdateStatus(
     );
 
     Promise.all([
-      query('UPDATE "EmailCampaign" SET "status" = "LIMIT" WHERE id = $1', [email.emailCampaignId]),
+      query('UPDATE "EmailCampaign" SET "status" = $1 WHERE id = $2', ["LIMIT",email.emailCampaignId]),
       query('UPDATE "Email" SET status = $1 WHERE id = $2', ["LIMIT", email.id]),
     ]);
     return;
@@ -97,6 +97,14 @@ async function sendEmailAndUpdateStatus(
     organizationName: campaignOrg.name,
     subscriptionType: organizationSubscription.leadManagementModuleType,
   });
+
+    const emailSubject = getEmailSubject({
+      subject: campaign.subject,
+      leadFirstName: email.leadFirstName || "",
+      leadLastName: email.leadLastName || "",
+      leadEmail: email.leadEmail,
+      leadCompanyName: email.leadCompanyName || "",
+    });
 
   if (suppressedResults) {
     Debug.devLog("UPDATING EMAIL STATUS TO SUPPRESS FOR EMAIL ID: ", email.id);
@@ -121,7 +129,7 @@ async function sendEmailAndUpdateStatus(
         senderName: campaign.senderName,
         body: header + emailBodyHTML + footer,
         recipient: email.leadEmail,
-        subject: campaign.subject,
+        subject: emailSubject,
         replyToEmail: campaign.replyToEmail,
         campaignId: email.emailCampaignId,
       },

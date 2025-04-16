@@ -4,7 +4,7 @@ import { query } from "../lib/db";
 import { AddSESEmailRouteParamsSchema, Email } from "../server/types/emailQueue";
 import { AppError, errorHandler } from "../lib/errorHandler";
 import { cache__getCampaignById, cache__getOrganizationSubscription, getSuppressedEmail } from "../db/emailQueries";
-import { getEmailBody } from "../lib/email";
+import { getEmailBody, getEmailSubject } from "../lib/email";
 import { sendEmailSES } from "../lib/aws";
 import {
   Days,
@@ -28,7 +28,7 @@ const handleJob = async (job: Job) => {
     const { email, campaignOrg } = validatedData.data;
     const { startTimeInUTC, endTimeInUTC, activeDays, timezone } = email;
 
-    const isActiveDayValue = isActiveDay(activeDays as Days[], timezone);
+    const isActiveDayValue = isActiveDay(activeDays as Days[], timezone ?? undefined);
     const isWithinTimeRange = isWithinPeriod(startTimeInUTC, endTimeInUTC);
 
     if (!isWithinTimeRange || !isActiveDayValue) {
@@ -73,7 +73,7 @@ async function sendEmailAndUpdateStatus(email: Email, campaignOrg: { name: strin
     );
 
     Promise.all([
-      query('UPDATE "EmailCampaign" SET "status" = "LIMIT" WHERE id = $1', [email.emailCampaignId]),
+      query('UPDATE "EmailCampaign" SET "status" = $1 WHERE id = $2', ["LIMIT",email.emailCampaignId]),
       query('UPDATE "Email" SET status = $1 WHERE id = $2', ["LIMIT", email.id]),
     ]);
     return;
@@ -93,6 +93,14 @@ async function sendEmailAndUpdateStatus(email: Email, campaignOrg: { name: strin
     subscriptionType: orgSubscription.leadManagementModuleType,
   });
 
+  const emailSubject = getEmailSubject({
+    subject: campaign.subject,
+    leadFirstName: email.leadFirstName || "",
+    leadLastName: email.leadLastName || "",
+    leadEmail: email.leadEmail,
+    leadCompanyName: email.leadCompanyName || "",
+  });
+
   if (suppressedResults) {
     await query('UPDATE "Email" SET status = $1 WHERE id = $2', ["SUPPRESS", email.id]);
     await query('UPDATE "EmailCampaign" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1', [
@@ -107,11 +115,11 @@ async function sendEmailAndUpdateStatus(email: Email, campaignOrg: { name: strin
   }
 
   const emailSent = await sendEmailSES({
-    senderEmail: campaign.senderEmail,
+    senderEmail: email.senderEmail,
     senderName: campaign.senderName,
     body: header + emailBodyHTML + footer,
     recipient: email.leadEmail,
-    subject: campaign.subject,
+    subject: emailSubject,
     replyToEmail: campaign.replyToEmail,
     campaignId: email.emailCampaignId,
   });
@@ -158,7 +166,7 @@ const worker = new Worker(SES_SKYFUNNEL_EMAIL_QUEUE_KEY, handleJob, {
 
 worker.on("failed", async (job) => {
   if (job && "id" in job.data.email) {
-    console.log("Updating email status to ERROR");
+    console.log("Updating status to ERROR for email with id " + job.data.email.id);
     await query('UPDATE "Email" SET status = $1 WHERE id = $2', ["ERROR", job.data.email.id]);
   }
 

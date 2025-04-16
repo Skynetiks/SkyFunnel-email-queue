@@ -20,14 +20,14 @@ module.exports = {
           // Add other environment variables here
         }
       },
-      {
-        name: 'skyfunnel-admin-worker',
-        script: 'npm run start:admin-worker',
-        watch: false,
-        env_production: {
-          NODE_ENV: 'production',
-          // Add other environment variables here
-        }
-      }
+      // {
+      //   name: 'skyfunnel-admin-worker',
+      //   script: 'npm run start:admin-worker',
+      //   watch: false,
+      //   env_production: {
+      //     NODE_ENV: 'production',
+      //     // Add other environment variables here
+      //   }
+      // }
     ]
   };
