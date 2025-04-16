@@ -28,3 +28,7 @@ export const smtpInputSchema = z.object({
 export const sesInputSchema = z.object({
   emailDetails: emailDetailsSchema,
 });
+
+export const clearCacheOrganizationSchema = z.object({
+  organizationId: z.string(),
+});
