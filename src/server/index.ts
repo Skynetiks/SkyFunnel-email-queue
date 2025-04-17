@@ -13,10 +13,11 @@ import { sendSMTPEmail } from "../lib/smtp";
 import { addAdminEmailsToQueue } from "./admin-email.js";
 import { skyfunnelSesQueue, smtpQueue } from "./emails";
 import authMiddleware from "./middlewares/auth.js";
-import { sesInputSchema, smtpInputSchema } from "./types/email";
+import { clearCacheOrganizationSchema, sesInputSchema, smtpInputSchema } from "./types/email";
 import { AddBulkSkyfunnelSesRouteParamsSchema, AddSESEmailRouteParamsSchema } from "./types/emailQueue.js";
 import { AddBulkSMTPRouteParamsSchema, AddSMTPRouteParamsSchema } from "./types/smtpQueue.js";
 import { sendEmailSES } from "../lib/aws.js";
+import { clearOrgCache } from "../db/emailQueries.js";
 
 dotenv.config();
 
@@ -262,6 +263,25 @@ app.post("/ses/send-email", async (req, res, next) => {
       success: true,
       message: "Email sent",
       sent: true,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/organization/clear-cache", async (req, res, next) => {
+  try {
+    const { success, data, error: ZodError } = clearCacheOrganizationSchema.safeParse(req.body);
+
+    if (!success) {
+      throw new AppError("BAD_REQUEST", ZodError.errors[0].path[0] + ": " + ZodError.errors[0].message);
+    }
+
+    await clearOrgCache(data.organizationId);
+
+    res.status(200).json({
+      success: true,
+      message: "Cache cleared",
     });
   } catch (error) {
     next(error);

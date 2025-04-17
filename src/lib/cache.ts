@@ -21,3 +21,8 @@ export const cache = async <T>(key: string, fn: () => Promise<T>, ttl: number = 
 
   return data;
 };
+
+export const deleteCache = async (key: string) => {
+  const redis = await getRedisConnection();
+  await redis.del(key);
+};

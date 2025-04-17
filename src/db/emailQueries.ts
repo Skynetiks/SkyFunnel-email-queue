@@ -1,5 +1,5 @@
 import { QueryResult } from "pg";
-import { cache } from "../lib/cache";
+import { cache, deleteCache } from "../lib/cache";
 import { query } from "../lib/db";
 
 export const getOrganizationById = async (organizationId: string) => {
@@ -98,4 +98,9 @@ export const getSuppressedEmail = async (email: string) => {
   }
 
   return response.rows[0];
+};
+
+export const clearOrgCache = async (organizationId: string) => {
+  await deleteCache(`organizationSubscription:${organizationId}`);
+  await deleteCache(`campaign:${organizationId}`);
 };
