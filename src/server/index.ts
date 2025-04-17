@@ -216,6 +216,8 @@ app.post("/ses/add-emails", async (req, res, next) => {
       throw new AppError("BAD_REQUEST", ZodError.errors[0].path[0] + ": " + ZodError.errors[0].message);
     }
 
+    console.log("[GOT_BULK_EMAILS]", bulkEmailData.emails.length);
+
     await skyfunnelSesQueue.addBulkEmailsToQueue(bulkEmailData, bulkEmailData.priority || DefaultPrioritySlug);
     res.status(200).json({
       success: true,
