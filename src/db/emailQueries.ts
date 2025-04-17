@@ -1,6 +1,7 @@
 import { QueryResult } from "pg";
 import { cache, deleteCache } from "../lib/cache";
 import { query } from "../lib/db";
+import { usageRedisStore } from "../lib/usageRedisStore";
 
 export const getOrganizationById = async (organizationId: string) => {
   const response = await query('SELECT * FROM "Organization" WHERE id = $1', [organizationId]);
@@ -103,4 +104,5 @@ export const getSuppressedEmail = async (email: string) => {
 export const clearOrgCache = async (organizationId: string) => {
   await deleteCache(`organizationSubscription:${organizationId}`);
   await deleteCache(`campaign:${organizationId}`);
+  await usageRedisStore.revalidateUsage(organizationId);
 };
