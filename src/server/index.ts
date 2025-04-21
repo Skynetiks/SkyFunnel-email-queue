@@ -71,7 +71,6 @@ app.get("/bullmq-stats", async (_, res) => {
 
 app.post("/smtp/add-emails", async (req, res, next) => {
   try {
-    console.log(req.body);
     const { success, data: bulkEmailData, error: ZodError } = AddBulkSMTPRouteParamsSchema.safeParse(req.body);
 
     if (!success) {
@@ -209,12 +208,13 @@ app.post("/smtp/cancel-campaign", async (req, res, next) => {
 
 app.post("/ses/add-emails", async (req, res, next) => {
   try {
-    console.log(req.body);
     const { success, data: bulkEmailData, error: ZodError } = AddBulkSkyfunnelSesRouteParamsSchema.safeParse(req.body);
 
     if (!success) {
       throw new AppError("BAD_REQUEST", ZodError.errors[0].path[0] + ": " + ZodError.errors[0].message);
     }
+
+    console.log("[GOT_BULK_EMAILS]", bulkEmailData.emails.length);
 
     await skyfunnelSesQueue.addBulkEmailsToQueue(bulkEmailData, bulkEmailData.priority || DefaultPrioritySlug);
     res.status(200).json({

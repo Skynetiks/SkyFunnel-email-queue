@@ -52,6 +52,14 @@ export class RedisUsageStore {
     return usageString ? parseInt(usageString, 10) : 0;
   }
 
+  async revalidateUsage(organizationId: string): Promise<void> {
+    await this.ready;
+    const usage = await getOrganizationById(organizationId);
+    if (usage) {
+      await this.setUsage(organizationId, usage.sentEmailCount);
+    }
+  }
+
   /**
    * Increments the usage counter by a specified amount (defaults to 1)
    * and returns the new total.

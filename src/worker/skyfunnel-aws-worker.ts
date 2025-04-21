@@ -15,6 +15,8 @@ import {
   isWithinPeriod,
 } from "../lib/utils";
 import { usageRedisStore } from "../lib/usageRedisStore";
+import { getRedLock } from "../lib/redis";
+import { Lock } from "redlock";
 
 const handleJob = async (job: Job) => {
   console.log("[SKYFUNNEL_WORKER] Job Started with jobID", job.id);
@@ -47,111 +49,124 @@ const handleJob = async (job: Job) => {
 };
 
 async function sendEmailAndUpdateStatus(email: Email, campaignOrg: { name: string; id: string }) {
-  const campaignPromise = cache__getCampaignById(email.emailCampaignId);
-  const organizationSubscriptionPromise = await cache__getOrganizationSubscription(campaignOrg.id);
+  const lockKey = `lock:org:${campaignOrg.id}`;
+  let lock: Lock | null = null;
 
-  const [campaign, orgSubscription] = await Promise.all([campaignPromise, organizationSubscriptionPromise]);
+  try {
+    const redlock = await getRedLock();
+    lock = await redlock.acquire([lockKey], 5000);
 
-  if (!campaign) throw new AppError("NOT_FOUND", "Campaign not found");
-  if (!orgSubscription) throw new AppError("NOT_FOUND", "Organization not found");
+    const campaignPromise = cache__getCampaignById(email.emailCampaignId);
+    const organizationSubscriptionPromise = await cache__getOrganizationSubscription(campaignOrg.id);
 
-  const isEmailsBlocked = orgSubscription.isEmailBlocked;
-  if (isEmailsBlocked) {
-    console.log("Emails are blocked for organization " + campaignOrg.id);
-    // TODO: Add a status "BLOCKED" to the email
-    await query('UPDATE "Email" SET status = $1 WHERE id = $2', ["ERROR", email.id]);
+    const [campaign, orgSubscription] = await Promise.all([campaignPromise, organizationSubscriptionPromise]);
 
-    // Silent return if emails are blocked. as we don't want to retry sending emails to blocked emails
-    return;
-  }
-  const organizationId = campaignOrg.id;
-  const orgUsage = await usageRedisStore.getUsage(organizationId);
-  Debug.log("Usage of organization " + organizationId + " is " + orgUsage);
-  if (orgUsage >= orgSubscription.allowedEmails) {
-    Debug.log(
-      `Organization ${organizationId} has reached its limit of ${orgUsage}/${orgSubscription.allowedEmails} emails`,
-    );
+    if (!campaign) throw new AppError("NOT_FOUND", "Campaign not found");
+    if (!orgSubscription) throw new AppError("NOT_FOUND", "Organization not found");
 
-    Promise.all([
-      query('UPDATE "EmailCampaign" SET "status" = $1 WHERE id = $2', ["LIMIT",email.emailCampaignId]),
-      query('UPDATE "Email" SET status = $1 WHERE id = $2', ["LIMIT", email.id]),
-    ]);
-    return;
-  }
-  const suppressedResults = await getSuppressedEmail(email.leadEmail);
+    const isEmailsBlocked = orgSubscription.isEmailBlocked;
+    if (isEmailsBlocked) {
+      console.log("Emails are blocked for organization " + campaignOrg.id);
+      // TODO: Add a status "BLOCKED" to the email
+      await query('UPDATE "Email" SET status = $1 WHERE id = $2', ["ERROR", email.id]);
 
-  const { emailBodyHTML, footer, header } = getEmailBody({
-    campaignId: email.emailCampaignId,
-    rawBodyHTML: campaign.campaignContentType === "TEXT" ? campaign.plainTextBody : campaign.bodyHTML,
-    emailId: email.id,
-    leadFirstName: email.leadFirstName || "",
-    leadLastName: email.leadLastName || "",
-    leadEmail: email.leadEmail,
-    leadCompanyName: email.leadCompanyName || "",
-    leadId: email.leadId,
-    organizationName: campaignOrg.name,
-    subscriptionType: orgSubscription.leadManagementModuleType,
-  });
+      // Silent return if emails are blocked. as we don't want to retry sending emails to blocked emails
+      return;
+    }
+    const organizationId = campaignOrg.id;
+    const orgUsage = await usageRedisStore.getUsage(organizationId);
+    Debug.log("Usage of organization " + organizationId + " is " + orgUsage);
+    if (orgUsage >= orgSubscription.allowedEmails) {
+      Debug.log(
+        `Organization ${organizationId} has reached its limit of ${orgUsage}/${orgSubscription.allowedEmails} emails`,
+      );
 
-  const emailSubject = getEmailSubject({
-    subject: campaign.subject,
-    leadFirstName: email.leadFirstName || "",
-    leadLastName: email.leadLastName || "",
-    leadEmail: email.leadEmail,
-    leadCompanyName: email.leadCompanyName || "",
-  });
+      await Promise.all([
+        query('UPDATE "EmailCampaign" SET "status" = $1 WHERE id = $2', ["LIMIT", email.emailCampaignId]),
+        query('UPDATE "Email" SET status = $1 WHERE id = $2', ["LIMIT", email.id]),
+      ]);
+      return;
+    }
+    const suppressedResults = await getSuppressedEmail(email.leadEmail);
 
-  if (suppressedResults) {
-    await query('UPDATE "Email" SET status = $1 WHERE id = $2', ["SUPPRESS", email.id]);
-    await query('UPDATE "EmailCampaign" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1', [
-      email.emailCampaignId,
-    ]);
-    await query(
-      'INSERT INTO "EmailEvent" ("id", "emailId", "eventType", "timestamp", "campaignId") VALUES (uuid_generate_v4(), $1, $2, $3, $4)',
-      [email.id, "SUPPRESS", new Date().toISOString(), email.emailCampaignId],
-    );
-    console.log("[SKYFUNNEL_WORKER] Suppressed email " + email.id);
-    return;
-  }
+    const { emailBodyHTML, footer, header } = getEmailBody({
+      campaignId: email.emailCampaignId,
+      rawBodyHTML: campaign.campaignContentType === "TEXT" ? campaign.plainTextBody : campaign.bodyHTML,
+      emailId: email.id,
+      leadFirstName: email.leadFirstName || "",
+      leadLastName: email.leadLastName || "",
+      leadEmail: email.leadEmail,
+      leadCompanyName: email.leadCompanyName || "",
+      leadId: email.leadId,
+      organizationName: campaignOrg.name,
+      subscriptionType: orgSubscription.leadManagementModuleType,
+    });
 
-  const emailSent = await sendEmailSES({
-    senderEmail: email.senderEmail,
-    senderName: campaign.senderName,
-    body: header + emailBodyHTML + footer,
-    recipient: email.leadEmail,
-    subject: emailSubject,
-    replyToEmail: campaign.replyToEmail,
-    campaignId: email.emailCampaignId,
-  });
+    const emailSubject = getEmailSubject({
+      subject: campaign.subject,
+      leadFirstName: email.leadFirstName || "",
+      leadLastName: email.leadLastName || "",
+      leadEmail: email.leadEmail,
+      leadCompanyName: email.leadCompanyName || "",
+    });
 
-  if (emailSent && emailSent.success && emailSent.message?.MessageId) {
-    const updateEmailResult = query('UPDATE "Email" SET status = $1, "messageId" = $2 WHERE id = $3', [
-      "SENT",
-      emailSent.message.MessageId || "",
-      email.id,
-    ]);
+    if (suppressedResults) {
+      await query('UPDATE "Email" SET status = $1 WHERE id = $2', ["SUPPRESS", email.id]);
+      await query('UPDATE "EmailCampaign" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1', [
+        email.emailCampaignId,
+      ]);
+      await query(
+        'INSERT INTO "EmailEvent" ("id", "emailId", "eventType", "timestamp", "campaignId") VALUES (uuid_generate_v4(), $1, $2, $3, $4)',
+        [email.id, "SUPPRESS", new Date().toISOString(), email.emailCampaignId],
+      );
+      console.log("[SKYFUNNEL_WORKER] Suppressed email " + email.id);
+      return;
+    }
 
-    const updateCampaignResult = query(
-      'UPDATE "EmailCampaign" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1',
-      [email.emailCampaignId],
-    );
+    const emailSent = await sendEmailSES({
+      senderEmail: email.senderEmail,
+      senderName: campaign.senderName,
+      body: header + emailBodyHTML + footer,
+      recipient: email.leadEmail,
+      subject: emailSubject,
+      replyToEmail: campaign.replyToEmail,
+      campaignId: email.emailCampaignId,
+    });
 
-    const updateOrganizationResult = query(
-      'UPDATE "Organization" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1',
-      [campaignOrg.id],
-    );
+    if (emailSent && emailSent.success && emailSent.message?.MessageId) {
+      const updateEmailResult = query('UPDATE "Email" SET status = $1, "messageId" = $2 WHERE id = $3', [
+        "SENT",
+        emailSent.message.MessageId || "",
+        email.id,
+      ]);
 
-    await usageRedisStore.incrementUsage(organizationId);
+      const updateCampaignResult = query(
+        'UPDATE "EmailCampaign" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1',
+        [email.emailCampaignId],
+      );
 
-    const addDeliveryEventResult = query(
-      'INSERT INTO "EmailEvent" ("id", "emailId", "eventType", "timestamp", "campaignId") VALUES (uuid_generate_v4(), $1, $2, $3, $4)',
-      [email.id, "DELIVERY", new Date().toISOString(), email.emailCampaignId],
-    );
+      const updateOrganizationResult = query(
+        'UPDATE "Organization" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1',
+        [campaignOrg.id],
+      );
 
-    await Promise.all([updateEmailResult, updateCampaignResult, updateOrganizationResult, addDeliveryEventResult]);
-  } else {
-    console.error("[SKYFUNNEL_WORKER] Error While Sending Emails via AWS", emailSent ? emailSent.error : "");
-    throw new AppError("INTERNAL_SERVER_ERROR", "Email not sent by AWS");
+      await usageRedisStore.incrementUsage(organizationId);
+
+      const addDeliveryEventResult = query(
+        'INSERT INTO "EmailEvent" ("id", "emailId", "eventType", "timestamp", "campaignId") VALUES (uuid_generate_v4(), $1, $2, $3, $4)',
+        [email.id, "DELIVERY", new Date().toISOString(), email.emailCampaignId],
+      );
+
+      await Promise.all([updateEmailResult, updateCampaignResult, updateOrganizationResult, addDeliveryEventResult]);
+    } else {
+      console.error("[SKYFUNNEL_WORKER] Error While Sending Emails via AWS", emailSent ? emailSent.error : "");
+      throw new AppError("INTERNAL_SERVER_ERROR", "Email not sent by AWS");
+    }
+  } catch (error) {
+    console.error("[SKYFUNNEL_WORKER] Error While Sending Emails via AWS", error);
+    throw error;
+  } finally {
+    if (lock) await lock.release().catch((err) => console.error("[SKYFUNNEL_WORKER] Error while releasing lock", err));
   }
 }
 

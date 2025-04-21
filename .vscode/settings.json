@@ -6,6 +6,7 @@
     "firstname",
     "lastname",
     "luxon",
+    "redlock",
     "sadd",
     "sismember",
     "Skyfunnel",
