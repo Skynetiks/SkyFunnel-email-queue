@@ -152,12 +152,7 @@ async function sendEmailAndUpdateStatus(email: Email, campaignOrg: { name: strin
 
       await usageRedisStore.incrementUsage(organizationId);
 
-      const addDeliveryEventResult = query(
-        'INSERT INTO "EmailEvent" ("id", "emailId", "eventType", "timestamp", "campaignId") VALUES (uuid_generate_v4(), $1, $2, $3, $4)',
-        [email.id, "DELIVERY", new Date().toISOString(), email.emailCampaignId],
-      );
-
-      await Promise.all([updateEmailResult, updateCampaignResult, updateOrganizationResult, addDeliveryEventResult]);
+      await Promise.all([updateEmailResult, updateCampaignResult, updateOrganizationResult]);
     } else {
       console.error("[SKYFUNNEL_WORKER] Error While Sending Emails via AWS", emailSent ? emailSent.error : "");
       throw new AppError("INTERNAL_SERVER_ERROR", "Email not sent by AWS");

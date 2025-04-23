@@ -77,7 +77,7 @@ async function sendEmailAndUpdateStatus(
     );
 
     Promise.all([
-      query('UPDATE "EmailCampaign" SET "status" = $1 WHERE id = $2', ["LIMIT",email.emailCampaignId]),
+      query('UPDATE "EmailCampaign" SET "status" = $1 WHERE id = $2', ["LIMIT", email.emailCampaignId]),
       query('UPDATE "Email" SET status = $1 WHERE id = $2', ["LIMIT", email.id]),
     ]);
     return;
@@ -98,13 +98,13 @@ async function sendEmailAndUpdateStatus(
     subscriptionType: organizationSubscription.leadManagementModuleType,
   });
 
-    const emailSubject = getEmailSubject({
-      subject: campaign.subject,
-      leadFirstName: email.leadFirstName || "",
-      leadLastName: email.leadLastName || "",
-      leadEmail: email.leadEmail,
-      leadCompanyName: email.leadCompanyName || "",
-    });
+  const emailSubject = getEmailSubject({
+    subject: campaign.subject,
+    leadFirstName: email.leadFirstName || "",
+    leadLastName: email.leadLastName || "",
+    leadEmail: email.leadEmail,
+    leadCompanyName: email.leadCompanyName || "",
+  });
 
   if (suppressedResults) {
     Debug.devLog("UPDATING EMAIL STATUS TO SUPPRESS FOR EMAIL ID: ", email.id);
@@ -161,12 +161,7 @@ async function sendEmailAndUpdateStatus(
 
       await usageRedisStore.incrementUsage(organizationId);
 
-      const addDeliveryEventResult = query(
-        'INSERT INTO "EmailEvent" ("id", "emailId", "eventType", "timestamp", "campaignId") VALUES (uuid_generate_v4(), $1, $2, $3, $4)',
-        [email.id, "DELIVERY", new Date().toISOString(), email.emailCampaignId],
-      );
-
-      await Promise.all([updateEmailResult, updateCampaignResult, addDeliveryEventResult, updateOrganizationResult]);
+      await Promise.all([updateEmailResult, updateCampaignResult, updateOrganizationResult]);
     } else {
       console.error(
         "[SMTP_WORKER] Error While Sending Emails via Smtp for",
