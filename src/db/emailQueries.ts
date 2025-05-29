@@ -38,9 +38,9 @@ export const getOrganizationSubscription = async (organizationId: string) => {
   return response.rows[0];
 };
 
-const ONE_DAY = 86400;
+const HALF_DAY = 43200;
 
-export const cache__getOrganizationSubscription = async (organizationId: string, ttl = ONE_DAY) => {
+export const cache__getOrganizationSubscription = async (organizationId: string, ttl = HALF_DAY) => {
   return await cache(
     `organizationSubscription:${organizationId}`,
     async () => {
@@ -82,7 +82,7 @@ export const getCampaignById = async (campaignId: string) => {
   return response.rows[0];
 };
 
-export const cache__getCampaignById = async (campaignId: string, ttl = ONE_DAY) => {
+export const cache__getCampaignById = async (campaignId: string, ttl = HALF_DAY) => {
   return await cache(
     `campaign:${campaignId}`,
     async () => {
