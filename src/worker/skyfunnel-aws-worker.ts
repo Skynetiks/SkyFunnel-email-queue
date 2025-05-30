@@ -56,7 +56,7 @@ async function sendEmailAndUpdateStatus(email: Email, campaignOrg: { name: strin
     const redlock = await getRedLock();
     lock = await redlock.acquire([lockKey], 5000);
 
-    const campaignPromise = cache__getCampaignById(email.emailCampaignId);
+    const campaignPromise = cache__getCampaignById(email.emailCampaignId, campaignOrg.id);
     const organizationSubscriptionPromise = await cache__getOrganizationSubscription(campaignOrg.id);
 
     const [campaign, orgSubscription] = await Promise.all([campaignPromise, organizationSubscriptionPromise]);
