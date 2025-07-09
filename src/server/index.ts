@@ -17,7 +17,7 @@ import { clearCacheOrganizationSchema, sesInputSchema, smtpInputSchema } from ".
 import { AddBulkSkyfunnelSesRouteParamsSchema, AddSESEmailRouteParamsSchema } from "./types/emailQueue.js";
 import { AddBulkSMTPRouteParamsSchema, AddSMTPRouteParamsSchema } from "./types/smtpQueue.js";
 import { sendEmailSES } from "../lib/aws.js";
-import { clearOrgCache } from "../db/emailQueries.js";
+import { clearCache } from "../db/emailQueries.js";
 
 dotenv.config();
 
@@ -277,7 +277,7 @@ app.post("/organization/clear-cache", async (req, res, next) => {
       throw new AppError("BAD_REQUEST", ZodError.errors[0].path[0] + ": " + ZodError.errors[0].message);
     }
 
-    await clearOrgCache(data.organizationId);
+    await clearCache(data.type, { campaignId: data.campaignId, organizationId: data.organizationId });
 
     res.status(200).json({
       success: true,

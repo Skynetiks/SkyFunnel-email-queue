@@ -55,7 +55,7 @@ async function sendEmailAndUpdateStatus(
   job: Job<AddSMTPRouteParamsType>,
 ) {
   const organizationId = campaignOrg.id;
-  const campaignPromise = cache__getCampaignById(email.emailCampaignId);
+  const campaignPromise = cache__getCampaignById(email.emailCampaignId, campaignOrg.id);
   const organizationSubscriptionPromise = await cache__getOrganizationSubscription(organizationId);
 
   const [campaign, organizationSubscription] = await Promise.all([campaignPromise, organizationSubscriptionPromise]);

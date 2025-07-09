@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { SMTPCredentialsSchema } from "./smtpQueue";
+import { CACHE_CLEAR_TYPE } from "../../db/emailQueries";
 
 const identityTypes = ["SMTP", "AWS_SMTP", "SKYFUNNEL"] as const;
 
@@ -29,6 +30,24 @@ export const sesInputSchema = z.object({
   emailDetails: emailDetailsSchema,
 });
 
-export const clearCacheOrganizationSchema = z.object({
-  organizationId: z.string(),
-});
+export const clearCacheOrganizationSchema = z
+  .object({
+    organizationId: z.string().min(3, { message: "Organization Id cannot be empty. Minimum 3 characters required" }),
+    type: z.nativeEnum(CACHE_CLEAR_TYPE).default(CACHE_CLEAR_TYPE.ALL),
+    campaignId: z.string().min(3, { message: "Minimum 3 characters required" }).optional(),
+  })
+  .superRefine((val, ctx) => {
+    if (val.type === CACHE_CLEAR_TYPE.CAMPAIGN && !val.campaignId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Campaign id is required when type is CAMPAIGN",
+      });
+    }
+
+    if (val.organizationId === "*" || val.campaignId === "*") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Organization id and campaign id cannot be *. DON'T ABUSE THIS! ☠️☠️",
+      });
+    }
+  });
