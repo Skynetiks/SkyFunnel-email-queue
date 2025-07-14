@@ -1,7 +1,6 @@
 import pg from "pg";
 import dotenv from "dotenv";
 import { Debug, isDevelopment } from "./utils";
-import fs from "fs"
 
 const { Pool } = pg;
 dotenv.config();
@@ -10,7 +9,7 @@ dotenv.config();
 // const __dirname = path.dirname(__filename);
 const sslOptions = !isDevelopment
   ? {
-      ca: fs.readFileSync("/etc/ssl/certs/ca-certificates.crt"),
+      rejectUnauthorized: true,
     }
   : { rejectUnauthorized: false };
 
