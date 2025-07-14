@@ -1,17 +1,18 @@
 import pg from "pg";
 import dotenv from "dotenv";
-import { Debug } from "./utils";
+import { Debug, isDevelopment } from "./utils";
+import fs from "fs"
 
 const { Pool } = pg;
 dotenv.config();
 
 // const __filename = fileURLToPath(import.meta.url);
 // const __dirname = path.dirname(__filename);
-// const sslOptions = !isDevelopment
-//   ? {
-//       ca: fs.readFileSync(path.resolve(__dirname, "./certs/us-east-1-bundle.pem")),
-//     }
-//   : { rejectUnauthorized: false };
+const sslOptions = !isDevelopment
+  ? {
+      ca: fs.readFileSync("/etc/ssl/certs/ca-certificates.crt"),
+    }
+  : { rejectUnauthorized: false };
 
 let pool: pg.Pool | undefined;
 
@@ -20,9 +21,7 @@ export function getPool() {
     Debug.log("Creating a new database pool");
     pool = new Pool({
       connectionString: process.env.DATABASE_URL,
-      ssl: {
-        rejectUnauthorized: false,
-      },
+      ssl: sslOptions,
       // PgBouncer optimized settings
       max: 10, // Much lower for PgBouncer - it handles the actual pooling
       min: 0, // No minimum connections needed with PgBouncer
