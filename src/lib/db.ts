@@ -18,17 +18,32 @@ let pool: pg.Pool | undefined;
 export function getPool() {
   if (!pool) {
     Debug.log("Creating a new database pool");
+
     pool = new Pool({
       connectionString: process.env.DATABASE_URL,
       ssl: sslOptions,
-      // PgBouncer optimized settings
-      max: 10, // Much lower for PgBouncer - it handles the actual pooling
-      min: 0, // No minimum connections needed with PgBouncer
-      idleTimeoutMillis: 30000, // 30 seconds - shorter since PgBouncer manages connections
-      connectionTimeoutMillis: 10000, // 10 seconds - faster timeout for PgBouncer
-      query_timeout: 30000, // 30 seconds query timeout
-      // Disable session-level features that don't work well with PgBouncer
+      // Conservative settings for PgBouncer with network issues
+      max: 5, // Very conservative limit
+      min: 0,
+      idleTimeoutMillis: 10000, // 10 seconds - aggressive cleanup
+      connectionTimeoutMillis: 15000, // 15 seconds - longer for network issues
+      query_timeout: 60000, // 60 seconds - longer for heavy queries
+      keepAlive: true, // Keep connections alive
+      keepAliveInitialDelayMillis: 10000,
       application_name: "skyfunnel-email-service",
+    });
+
+    // Add comprehensive error handling
+    pool.on("error", (err) => {
+      Debug.error("Database pool error:", err);
+    });
+
+    pool.on("connect", () => {
+      Debug.log("New database client connected");
+    });
+
+    pool.on("remove", () => {
+      Debug.log("Database client removed from pool");
     });
   }
   return pool;
@@ -52,6 +67,12 @@ export const query = async (text: string, params: (string | number)[]) => {
     // Log pool status for debugging
     const pool = getPool();
     Debug.error(`[DB] Pool status - total: ${pool.totalCount}, idle: ${pool.idleCount}, waiting: ${pool.waitingCount}`);
+
+    // Log connection string (without password) for debugging
+    const dbUrl = process.env.DATABASE_URL || "";
+    const sanitizedUrl = dbUrl.replace(/:[^:@]*@/, ":***@");
+    Debug.error(`[DB] Connection string: ${sanitizedUrl}`);
+
     throw error;
   } finally {
     if (client) {
