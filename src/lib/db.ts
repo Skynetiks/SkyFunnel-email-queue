@@ -7,6 +7,11 @@ dotenv.config();
 
 // const __filename = fileURLToPath(import.meta.url);
 // const __dirname = path.dirname(__filename);
+
+if (isDevelopment) {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+}
+
 const sslOptions = !isDevelopment
   ? {
       rejectUnauthorized: true,
