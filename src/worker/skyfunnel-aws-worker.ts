@@ -15,8 +15,6 @@ import {
   isWithinPeriod,
 } from "../lib/utils";
 import { usageRedisStore } from "../lib/usageRedisStore";
-import { getRedLock } from "../lib/redis";
-import { Lock } from "redlock";
 
 const handleJob = async (job: Job) => {
   console.log("[SKYFUNNEL_WORKER] Job Started with jobID", job.id);
@@ -24,6 +22,7 @@ const handleJob = async (job: Job) => {
   try {
     const validatedData = AddSESEmailRouteParamsSchema.safeParse(data);
     if (!validatedData.success) {
+      Debug.error("[EDGE_CASE] Validation failed for job data. This should not happen if job producer is correct.");
       throw new AppError("BAD_REQUEST", validatedData.error.errors[0].message);
     }
 
@@ -49,15 +48,15 @@ const handleJob = async (job: Job) => {
 };
 
 async function sendEmailAndUpdateStatus(email: Email, campaignOrg: { name: string; id: string }) {
-  const lockKey = `lock:org:${campaignOrg.id}`;
-  let lock: Lock | null = null;
+  // const lockKey = `lock:org:${campaignOrg.id}`;
+  // let lock: Lock | null = null;
 
   try {
-    const redlock = await getRedLock();
-    lock = await redlock.acquire([lockKey], 5000);
+    // const redlock = await getRedLock();
+    // lock = await redlock.acquire([lockKey], 5000);
 
     const campaignPromise = cache__getCampaignById(email.emailCampaignId, campaignOrg.id);
-    const organizationSubscriptionPromise = await cache__getOrganizationSubscription(campaignOrg.id);
+    const organizationSubscriptionPromise = cache__getOrganizationSubscription(campaignOrg.id);
 
     const [campaign, orgSubscription] = await Promise.all([campaignPromise, organizationSubscriptionPromise]);
 
@@ -67,7 +66,6 @@ async function sendEmailAndUpdateStatus(email: Email, campaignOrg: { name: strin
     const isEmailsBlocked = orgSubscription.isEmailBlocked;
     if (isEmailsBlocked) {
       console.log("Emails are blocked for organization " + campaignOrg.id);
-      // TODO: Add a status "BLOCKED" to the email
       await query('UPDATE "Email" SET status = $1 WHERE id = $2', ["ERROR", email.id]);
 
       // Silent return if emails are blocked. as we don't want to retry sending emails to blocked emails
@@ -133,19 +131,26 @@ async function sendEmailAndUpdateStatus(email: Email, campaignOrg: { name: strin
       campaignId: email.emailCampaignId,
     });
 
+    if (emailSent && emailSent.success && !emailSent.message?.MessageId) {
+      Debug.error(
+        `[EDGE_CASE] SES response returned success but missing MessageId. Email ID: ${email.id}, ` +
+          `Campaign ID: ${email.emailCampaignId}, Lead: ${email.leadEmail}`,
+      );
+    }
+
     if (emailSent && emailSent.success && emailSent.message?.MessageId) {
-      const updateEmailResult = query('UPDATE "Email" SET status = $1, "messageId" = $2 WHERE id = $3', [
+      const updateEmailResult = await query('UPDATE "Email" SET status = $1, "messageId" = $2 WHERE id = $3', [
         "SENT",
         emailSent.message.MessageId || "",
         email.id,
       ]);
 
-      const updateCampaignResult = query(
+      const updateCampaignResult = await query(
         'UPDATE "EmailCampaign" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1',
         [email.emailCampaignId],
       );
 
-      const updateOrganizationResult = query(
+      const updateOrganizationResult = await query(
         'UPDATE "Organization" SET "sentEmailCount" = "sentEmailCount" + 1 WHERE id = $1',
         [campaignOrg.id],
       );
@@ -160,9 +165,10 @@ async function sendEmailAndUpdateStatus(email: Email, campaignOrg: { name: strin
   } catch (error) {
     console.error("[SKYFUNNEL_WORKER] Error While Sending Emails via AWS", error);
     throw error;
-  } finally {
-    if (lock) await lock.release().catch((err) => console.error("[SKYFUNNEL_WORKER] Error while releasing lock", err));
   }
+  // finally {
+  //   // if (lock) await lock.release().catch((err) => console.error("[EDGE_CASE] Error while releasing lock", err));
+  // }
 }
 
 const redisUrl = process.env.REDIS_URL;
@@ -175,6 +181,7 @@ const worker = new Worker(SES_SKYFUNNEL_EMAIL_QUEUE_KEY, handleJob, {
 });
 
 worker.on("failed", async (job) => {
+  Debug.error(`[EDGE_CASE] Email Failed but don't have emailId In it, ${JSON.stringify(job?.data)} `);
   if (job && "id" in job.data.email) {
     console.log("Updating status to ERROR for email with id " + job.data.email.id);
     await query('UPDATE "Email" SET status = $1 WHERE id = $2', ["ERROR", job.data.email.id]);
