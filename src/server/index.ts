@@ -55,6 +55,13 @@ app.get("/", async (_, res) => {
   });
 });
 
+app.get("/health", async (_, res) => {
+  res.send({
+    status: "ok",
+    message: "Server is running",
+  });
+});
+
 app.get("/bullmq-stats", async (_, res) => {
   const smtpCounts = await smtpQueue.getBullMqStats();
   const skyfunnelSesCounts = await skyfunnelSesQueue.getBullMqStats();
