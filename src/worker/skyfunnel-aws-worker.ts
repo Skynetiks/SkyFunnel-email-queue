@@ -87,7 +87,7 @@ async function sendEmailAndUpdateStatus(email: Email, campaignOrg: { name: strin
     }
     const suppressedResults = await getSuppressedEmail(email.leadEmail);
 
-    const { emailBodyHTML, footer, header } = getEmailBody({
+    const { emailBodyHTML, header } = getEmailBody({
       campaignId: email.emailCampaignId,
       rawBodyHTML: campaign.campaignContentType === "TEXT" ? campaign.plainTextBody : campaign.bodyHTML,
       emailId: email.id,
@@ -124,7 +124,7 @@ async function sendEmailAndUpdateStatus(email: Email, campaignOrg: { name: strin
     const emailSent = await sendEmailSES({
       senderEmail: email.senderEmail,
       senderName: campaign.senderName,
-      body: header + emailBodyHTML + footer,
+      body: header + emailBodyHTML,
       recipient: email.leadEmail,
       subject: emailSubject,
       replyToEmail: campaign.replyToEmail,

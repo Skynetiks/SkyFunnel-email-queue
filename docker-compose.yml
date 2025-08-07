@@ -7,13 +7,18 @@ services:
     env_file:
       - .env
     environment:
-      - NODE_ENV=production
       - PORT=3000
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   worker:
     build: .
     command: ["npm", "run", "start:worker"]
     env_file:
       - .env
-    environment:
-      - NODE_ENV=production
+    restart: always
