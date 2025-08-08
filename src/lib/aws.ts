@@ -1,7 +1,10 @@
 import dotenv from "dotenv";
-import { SendEmailCommand, SESClient, SESClientConfig } from "@aws-sdk/client-ses";
+import { SendEmailCommand, SESv2Client, SESv2ClientConfig } from "@aws-sdk/client-sesv2";
 import { AppError } from "./errorHandler";
-import { Debug } from "./utils";
+import { Debug } from "./debug";
+import { createTransport } from "nodemailer";
+import { MailOptions } from "nodemailer/lib/stream-transport";
+
 dotenv.config();
 
 if (!process.env.SES_REGION) {
@@ -16,17 +19,140 @@ if (!process.env.SES_SECRET_KEY) {
   throw new Error("SES_SECRET_KEY is required");
 }
 
-if (!process.env.CONFIGURATION_SET) {
+if (!process.env.CONFIGURATION_SET && process.env.NODE_ENV !== "development") {
   throw new Error("CONFIGURATION_SET is required");
 }
 
-const sesClient: SESClient = new SESClient({
+const sesClient: SESv2Client = new SESv2Client({
   region: process.env.SES_REGION,
   credentials: {
     accessKeyId: process.env.SES_ACCESS_KEY,
     secretAccessKey: process.env.SES_SECRET_KEY,
   },
-} as SESClientConfig);
+} as SESv2ClientConfig);
+
+const getHeaders = ({
+  campaignId,
+  unsubscribeUrl,
+}: {
+  campaignId?: string;
+  unsubscribeUrl?: string;
+}): Record<string, string> => {
+  const headers = [];
+
+  if (campaignId) {
+    headers.push({
+      Name: "X-Campaign-Id",
+      Value: campaignId,
+    });
+  }
+
+  if (unsubscribeUrl) {
+    headers.push({
+      Name: "List-Unsubscribe",
+      Value: `<${unsubscribeUrl}>`,
+    });
+
+    headers.push({
+      Name: "List-Unsubscribe-Post",
+      Value: "List-Unsubscribe=One-Click",
+    });
+  }
+
+  return headers.reduce(
+    (acc, header) => {
+      acc[header.Name] = header.Value;
+      return acc;
+    },
+    {} as Record<string, string>,
+  );
+};
+
+const getRawEmail = async ({
+  to,
+  from,
+  subject,
+  html,
+  text,
+  replyTo,
+  unsubscribeUrl,
+  campaignId,
+}: {
+  to: string;
+  from: string;
+  subject: string;
+  html: string;
+  text: string;
+  replyTo?: string;
+  unsubscribeUrl?: string;
+  campaignId?: string;
+}) => {
+  const campaignIdHtml = campaignId ? `<p style='display:none'>thread::${campaignId}</p>` : "";
+  const bodyWithCampaignIdHtml = `${html} ${campaignIdHtml}`;
+  const bodyWithCampaignId = `${text} ${campaignIdHtml}`;
+
+  const headers = getHeaders({ campaignId, unsubscribeUrl });
+
+  const nodemailerTransport = createTransport({
+    streamTransport: true,
+    newline: "unix",
+    buffer: true,
+  });
+
+  const message = {
+    from,
+    to,
+    subject,
+    text: bodyWithCampaignId,
+    html: bodyWithCampaignIdHtml,
+    replyTo: replyTo || from,
+    headers,
+  } satisfies MailOptions;
+
+  const rawEmail = await new Promise<Buffer>((resolve, reject) => {
+    nodemailerTransport.sendMail(message, (err, info) => {
+      if (err) return reject(err);
+      resolve(info.message as Buffer);
+    });
+  });
+
+  return rawEmail;
+};
+
+const getSendEmailCommand = async (
+  senderEmail: string,
+  senderName: string,
+  recipient: string,
+  subject: string,
+  body: string,
+  replyToEmail?: string,
+  campaignId?: string,
+  unsubscribeUrl?: string,
+) => {
+  const rawEmail = await getRawEmail({
+    to: recipient,
+    from: senderName ? `${senderName} <${senderEmail}>` : senderEmail,
+    subject,
+    html: body,
+    text: body,
+    campaignId: campaignId,
+    replyTo: replyToEmail || senderEmail,
+    unsubscribeUrl,
+  });
+
+  return new SendEmailCommand({
+    Content: {
+      Raw: {
+        Data: rawEmail,
+      },
+    },
+    ...(process.env.CONFIGURATION_SET
+      ? {
+          ConfigurationSetName: process.env.CONFIGURATION_SET,
+        }
+      : {}),
+  });
+};
 
 type Props = {
   senderEmail: string;
@@ -36,61 +162,7 @@ type Props = {
   body: string;
   replyToEmail?: string;
   campaignId?: string;
-};
-
-const getSendEmailCommand = (
-  senderEmail: string,
-  senderName: string,
-  recipient: string,
-  subject: string,
-  body: string,
-  replyToEmail?: string,
-  campaignId?: string,
-) => {
-  const bodyWithCampaignId = campaignId ? `${body} thread::${campaignId}` : body;
-  const campaignIdHtml = campaignId ? `<p style='display:none'>thread::${campaignId}</p>` : "";
-  const bodyWithCampaignIdHtml = `${body} ${campaignIdHtml}`;
-  return new SendEmailCommand({
-    Destination: {
-      /* required */
-      CcAddresses: [
-        /* more items */
-      ],
-      ToAddresses: [
-        /* more To-email addresses */
-        // recipient,
-        recipient,
-      ],
-    },
-    Message: {
-      /* required */
-      Body: {
-        /* required */
-        Html: {
-          Charset: "UTF-8",
-          Data: bodyWithCampaignIdHtml,
-        },
-        Text: {
-          Charset: "UTF-8",
-          Data: bodyWithCampaignId,
-        },
-      },
-      Subject: {
-        Charset: "UTF-8",
-        Data: subject,
-      },
-    },
-    Source: `${senderName} <${senderEmail}>`,
-    ReplyToAddresses: [
-      /* more items */
-      replyToEmail || senderEmail,
-    ],
-    ...(process.env.CONFIGURATION_SET
-      ? {
-          ConfigurationSetName: process.env.CONFIGURATION_SET,
-        }
-      : {}),
-  });
+  unsubscribeUrl?: string;
 };
 
 export async function sendEmailSES({
@@ -101,6 +173,7 @@ export async function sendEmailSES({
   body,
   replyToEmail,
   campaignId,
+  unsubscribeUrl,
 }: Props) {
   if (!senderEmail || !senderName || !recipient || !subject || !body) {
     throw new AppError(
@@ -109,7 +182,7 @@ export async function sendEmailSES({
     );
   }
 
-  const sendEmailCommand = getSendEmailCommand(
+  const sendEmailCommand = await getSendEmailCommand(
     senderEmail,
     senderName,
     recipient,
@@ -117,6 +190,7 @@ export async function sendEmailSES({
     body,
     replyToEmail,
     campaignId,
+    unsubscribeUrl,
   );
 
   try {
@@ -142,10 +216,10 @@ export async function sendEmailSESWithCredentials({
     );
   }
 
-  const sendEmailCommand = getSendEmailCommand(senderEmail, senderName, recipient, subject, body, replyToEmail);
+  const sendEmailCommand = await getSendEmailCommand(senderEmail, senderName, recipient, subject, body, replyToEmail);
 
   try {
-    const sesClient = new SESClient({
+    const sesClient = new SESv2Client({
       region: credentials.region,
       credentials: {
         accessKeyId: credentials.accessKeyId,

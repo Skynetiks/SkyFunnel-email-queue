@@ -1,5 +1,5 @@
 import { getRedisConnection } from "./redis";
-import { Debug } from "./utils";
+import { Debug } from "./debug";
 
 export const cache = async <T>(key: string, fn: () => Promise<T>, ttl: number = 3600): Promise<T> => {
   // Try to get cached data

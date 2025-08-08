@@ -1,6 +1,7 @@
 import pg from "pg";
 import dotenv from "dotenv";
-import { Debug, isDevelopment } from "./utils";
+import { isDevelopment } from "./utils";
+import { Debug } from "./debug";
 
 const { Pool } = pg;
 dotenv.config();
@@ -9,7 +10,7 @@ dotenv.config();
 // const __dirname = path.dirname(__filename);
 
 if (isDevelopment) {
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 }
 
 const sslOptions = !isDevelopment

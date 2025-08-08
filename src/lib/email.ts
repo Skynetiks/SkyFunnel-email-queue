@@ -1,4 +1,5 @@
 import { getHeader } from "../worker/template";
+import { generateUnsubscribeToken, UnsubscribeTokenPayload } from "./token";
 import { replaceUrlsInEmailHtml } from "./utils";
 
 export type TSubscriptionType = "FREE" | "BASIC" | "PRO" | "CUSTOM";
@@ -22,6 +23,10 @@ export const getEmailBody = (data: Params) => {
     data.emailId,
   );
 
+  const unsubscribeKey = `unsubscribe_link`;
+
+  const hasUnsubscribeLink = data.rawBodyHTML.includes(unsubscribeKey);
+
   const emailBodyHTML = trackedEmailBodyHTML.replace(/\[\[(\w+)(?:\s*\|\|\s*(.+?))?\]\]/g, (match, key, fallback) => {
     switch (key.toLowerCase()) {
       case "firstname":
@@ -32,7 +37,7 @@ export const getEmailBody = (data: Params) => {
         return data.leadEmail || fallback || "";
       case "companyname":
         return data.leadCompanyName || fallback || "";
-      case "unsubscribe_link":
+      case unsubscribeKey:
         return `${process.env.MAIN_APP_BASE_URL}unsubscribe/${data.leadId}`;
       default:
         return fallback || "";
@@ -42,7 +47,7 @@ export const getEmailBody = (data: Params) => {
   //   const footer = getFooter(data.organizationName, data.leadId, data.subscriptionType);
   const header = getHeader(data.campaignId, data.emailId);
 
-  return { emailBodyHTML, header };
+  return { emailBodyHTML, header, hasUnsubscribeLink };
 };
 
 interface GetEmailSubjectParams {
@@ -71,3 +76,16 @@ export const getEmailSubject = (data: GetEmailSubjectParams) => {
 
   return emailSubject;
 };
+
+export const getUnsubscribeLink = (hasUnsubscribeLink: boolean, data: UnsubscribeTokenPayload) => {
+  if (!hasUnsubscribeLink) return undefined;
+  const EXPIRES_IN_HOURS = 8 * 24; // 8 days
+  const token = generateUnsubscribeToken(data, EXPIRES_IN_HOURS);
+  return `${process.env.MAIN_APP_BASE_URL}/api/unsubscribe?token=${token}`;
+};
+
+export function maskEmail(email: string): string {
+  const [local, domain] = email.split("@");
+  if (local.length <= 2) return `*@${domain}`;
+  return `${local[0]}***${local.slice(-1)}@${domain}`;
+}
