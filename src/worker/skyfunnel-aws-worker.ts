@@ -4,17 +4,18 @@ import { query } from "../lib/db";
 import { AddSESEmailRouteParamsSchema, Email } from "../server/types/emailQueue";
 import { AppError, errorHandler } from "../lib/errorHandler";
 import { cache__getCampaignById, cache__getOrganizationSubscription, getSuppressedEmail } from "../db/emailQueries";
-import { getEmailBody, getEmailSubject } from "../lib/email";
+import { getEmailBody, getEmailSubject, getUnsubscribeLink, maskEmail } from "../lib/email";
 import { sendEmailSES } from "../lib/aws";
 import {
   Days,
-  Debug,
   delayAllSkyfCampaignJobsTillNextValidTime,
   getNextActiveTime,
   isActiveDay,
   isWithinPeriod,
 } from "../lib/utils";
 import { usageRedisStore } from "../lib/usageRedisStore";
+import { Debug } from "../lib/debug";
+import { UnsubscribeTokenPayload } from "../lib/token";
 
 const handleJob = async (job: Job) => {
   console.log("[SKYFUNNEL_WORKER] Job Started with jobID", job.id);
@@ -87,7 +88,7 @@ async function sendEmailAndUpdateStatus(email: Email, campaignOrg: { name: strin
     }
     const suppressedResults = await getSuppressedEmail(email.leadEmail);
 
-    const { emailBodyHTML, header } = getEmailBody({
+    const { emailBodyHTML, header, hasUnsubscribeLink } = getEmailBody({
       campaignId: email.emailCampaignId,
       rawBodyHTML: campaign.campaignContentType === "TEXT" ? campaign.plainTextBody : campaign.bodyHTML,
       emailId: email.id,
@@ -121,6 +122,16 @@ async function sendEmailAndUpdateStatus(email: Email, campaignOrg: { name: strin
       return;
     }
 
+    const unsubscribeTokenPayload: UnsubscribeTokenPayload = {
+      leadId: email.leadId,
+      email: maskEmail(email.leadEmail),
+      campaignId: email.emailCampaignId,
+      reason: "User clicked the unsubscribe link/button in their email client",
+      type: "unsubscribe",
+    };
+
+    const unsubscribeLink = getUnsubscribeLink(hasUnsubscribeLink, unsubscribeTokenPayload);
+
     const emailSent = await sendEmailSES({
       senderEmail: email.senderEmail,
       senderName: campaign.senderName,
@@ -129,6 +140,7 @@ async function sendEmailAndUpdateStatus(email: Email, campaignOrg: { name: strin
       subject: emailSubject,
       replyToEmail: campaign.replyToEmail,
       campaignId: email.emailCampaignId,
+      unsubscribeUrl: unsubscribeLink,
     });
 
     if (emailSent && emailSent.success && !emailSent.message?.MessageId) {

@@ -1,7 +1,7 @@
 import { Redis } from "ioredis";
 import dotenv from "dotenv";
 import Redlock from "redlock";
-import { Debug } from "./utils";
+import { Debug } from "./debug";
 
 dotenv.config();
 

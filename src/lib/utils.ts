@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { DateTime, Info } from "luxon";
 import dotenv from "dotenv";
 import { skyfunnelSesQueue, smtpQueue } from "../server/emails";
@@ -42,7 +41,7 @@ export function replaceUrlsInEmailHtml(campaign: { id: string; bodyHTML: string 
     const encodedUrl = encodeURIComponent(url);
     return match.replace(
       url,
-      `${process.env.MAIN_APP_BASE_URL}api/email-track-click?campaignId=${campaign.id}&emailId=${emailId}&url=${encodedUrl}`,
+      `${process.env.MAIN_APP_BASE_URL}/api/email-track-click?campaignId=${campaign.id}&emailId=${emailId}&url=${encodedUrl}`,
     );
   });
 
@@ -69,26 +68,6 @@ export const convertHtmlToText = (html: string) => {
 
   return plainTextBody;
 };
-
-export class Debug {
-  public static devLog(...args: any[]) {
-    if (
-      process.env.NODE_ENV === "development" ||
-      process.env.SMTP_DEBUG === "true" ||
-      process.env.LOGS_DEBUG === "true"
-    ) {
-      console.log("[DEV]", ...args);
-    }
-  }
-
-  public static log(...args: any[]) {
-    console.log(...args);
-  }
-
-  public static error(...args: any[]) {
-    console.error(...args);
-  }
-}
 
 /**
  * Checks if current time is within the given period.
@@ -127,7 +106,7 @@ export enum Days {
 }
 export function isActiveDay(activeDays: Days[], timezone: string = "UTC"): boolean {
   // Use luxon to get the current day in the specified timezone
-  if(activeDays.length === 0) return true;
+  if (activeDays.length === 0) return true;
   const today = DateTime.now().setZone(timezone);
   const todayDayName = today.toFormat("cccc").toUpperCase();
 
@@ -175,7 +154,9 @@ export async function delayAllSkyfCampaignJobsTillNextValidTime(currentJob: Job,
   const queue = skyfunnelSesQueue.getQueue();
   const jobs = await queue.getJobs(["delayed", "waiting"]);
 
-  const jobsToReschedule = jobs.filter((job) => job.data.email.emailCampaignId === currentJob.data.email.emailCampaignId);
+  const jobsToReschedule = jobs.filter(
+    (job) => job.data.email.emailCampaignId === currentJob.data.email.emailCampaignId,
+  );
 
   if (jobs.length === 0) {
     console.log("[SKYFUNNEL_WORKER] No jobs found, only rescheduling the current job.");
@@ -225,7 +206,9 @@ export async function delayAllSMTPCampaignJobsTillNextValidTime(currentJob: Job,
   const queue = smtpQueue.getQueue();
   const jobs = await queue.getJobs(["delayed", "waiting"]);
 
-  const jobsToReschedule = jobs.filter((job) => job.data.email.emailCampaignId === currentJob.data.email.emailCampaignId);
+  const jobsToReschedule = jobs.filter(
+    (job) => job.data.email.emailCampaignId === currentJob.data.email.emailCampaignId,
+  );
 
   if (jobs.length === 0) {
     console.log("[SMTP_WORKER] No jobs found, only rescheduling the current job.");

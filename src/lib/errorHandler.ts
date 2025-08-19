@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from "express";
-import { Debug } from "./utils";
+import { Debug } from "./debug";
 
 type ERROR_LEVELS = "LOW" | "MEDIUM" | "HIGH";
 
