@@ -10,7 +10,7 @@ export const getFooter = (organizationName: string, leadId: string, subscription
                 </p>
                 <p style="text-align:center; font-size:12px">
                     Do not want to receive these mails? Click
-                    <a href="${process.env.MAIN_APP_BASE_URL}unsubscribe/${leadId}" style="text-decoration: underline">here</a> to
+                    <a href="${process.env.MAIN_APP_BASE_URL}/unsubscribe/${leadId}" style="text-decoration: underline">here</a> to
                     unsubscribe.
                 </p>
                 <p style="text-align:center; padding: 0px 0px 16px 0px; font-size:14px;">

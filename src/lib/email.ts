@@ -38,7 +38,7 @@ export const getEmailBody = (data: Params) => {
       case "companyname":
         return data.leadCompanyName || fallback || "";
       case unsubscribeKey:
-        return `${process.env.MAIN_APP_BASE_URL}unsubscribe/${data.leadId}`;
+        return `${process.env.MAIN_APP_BASE_URL}/unsubscribe/${data.leadId}`;
       default:
         return fallback || "";
     }

@@ -41,7 +41,7 @@ export function replaceUrlsInEmailHtml(campaign: { id: string; bodyHTML: string 
     const encodedUrl = encodeURIComponent(url);
     return match.replace(
       url,
-      `${process.env.MAIN_APP_BASE_URL}api/email-track-click?campaignId=${campaign.id}&emailId=${emailId}&url=${encodedUrl}`,
+      `${process.env.MAIN_APP_BASE_URL}/api/email-track-click?campaignId=${campaign.id}&emailId=${emailId}&url=${encodedUrl}`,
     );
   });
 
