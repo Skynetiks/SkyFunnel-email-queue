@@ -7,36 +7,50 @@ on:
       - completed
 
 jobs:
-  deploy:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
-
-    runs-on: self-hosted
-    env:
-      IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
-    steps:
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD_READ_ONLY }}
+    deploy-dev:
+        if: ${{ github.event.workflow_run.head_branch == 'dev' }}
+        runs-on: [self-hosted, email-event]  # only runs on dev server
+        env:
+            IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
+        steps:
+          - name: Log in to Docker Hub
+            uses: docker/login-action@v2
+            with:
+             username: ${{ secrets.DOCKER_USERNAME }}
+             password: ${{ secrets.DOCKER_PASSWORD_READ_ONLY }}
 
       # 3️⃣ Set image tag
-      - name: Pull latest Docker image
-        run: |
-            BRANCH=${{ github.event.workflow_run.head_branch }}
-            echo "BRANCH=$BRANCH"
-            if [ "$BRANCH" = "main" ]; then
-            TAG=prod
-            elif [ "$BRANCH" = "dev" ]; then
-            TAG=dev
-            else
-            TAG=$BRANCH
-            fi
-            echo "TAG=$TAG"
-            docker pull $IMAGE_NAME:$TAG
+          - name: Pull latest Docker image
+            run: |
+                echo "Pulling latest Docker image: $IMAGE_NAME:dev"
+                docker pull $IMAGE_NAME:dev
+
+          - name: Run reload.sh
+            run: |
+                chmod +x /home/actions/scripts/reload.sh
+                /home/actions/scripts/reload.sh
 
 
-      - name: Run reload.sh
-        run: |
-          chmod +x /home/actions/scripts/reload.sh
-          /home/actions/scripts/reload.sh
+    deploy-prod:
+        if: ${{ github.event.workflow_run.head_branch == 'main' }}
+        runs-on: [self-hosted, email-event-prod]  # only runs on prod server
+        env:
+            IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
+        steps:
+          - name: Log in to Docker Hub
+            uses: docker/login-action@v2
+            with:
+             username: ${{ secrets.DOCKER_USERNAME }}
+             password: ${{ secrets.DOCKER_PASSWORD_READ_ONLY }}
+
+        # 3️⃣ Set image tag
+          - name: Pull latest Docker image
+            run: |
+                echo "Pulling latest Docker image: $IMAGE_NAME:prod"
+                docker pull $IMAGE_NAME:prod
+
+
+          - name: Run reload.sh
+            run: |
+                   chmod +x /home/actions/scripts/reload.sh
+                   /home/actions/scripts/reload.sh
