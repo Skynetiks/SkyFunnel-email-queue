@@ -9,7 +9,7 @@ on:
 jobs:
     deploy-dev:
         if: ${{ github.event.workflow_run.head_branch == 'dev' }}
-        runs-on: [self-hosted, email-queue]  # only runs on dev server
+        runs-on: [self-hosted, email-queue-dev]  # only runs on dev server
         env:
             IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
         steps:
@@ -33,7 +33,7 @@ jobs:
 
     deploy-prod:
         if: ${{ github.event.workflow_run.head_branch == 'main' }}
-        runs-on: [self-hosted, email-event-prod]  # only runs on prod server
+        runs-on: [self-hosted, email-queue-prod]  # only runs on prod server
         env:
             IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
         steps:

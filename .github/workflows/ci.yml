@@ -18,7 +18,7 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v3
 
-      # 2️⃣ Set image tag
+      # 2️⃣ Set image tag for docker image
       - name: Set image tag
         run: |
           # Extract branch name from GITHUB_REF
