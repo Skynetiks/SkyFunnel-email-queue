@@ -4,11 +4,6 @@ on:
   push:
     branches:
       - dev         # triggers CI on direct commits to dev
-  pull_request:
-    branches:
-      - dev
-    types:
-      - closed         # triggers CI when a PR is merged into dev
 
 jobs:
   docker:
