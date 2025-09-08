@@ -7,8 +7,9 @@ on:
       - completed
 
 jobs:
-  deploy:
+  deploy-dev:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
     runs-on: self-hosted
     env:
       IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
@@ -19,8 +20,21 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD_READ_ONLY }}
 
+      # 3️⃣ Set image tag
       - name: Pull latest Docker image
-        run: docker pull $IMAGE_NAME:latest
+        run: |
+            BRANCH=${{ github.event.workflow_run.head_branch }}
+            echo "BRANCH=$BRANCH"
+            if [ "$BRANCH" = "main" ]; then
+            TAG=prod
+            elif [ "$BRANCH" = "dev" ]; then
+            TAG=dev
+            else
+            TAG=$BRANCH
+            fi
+            echo "TAG=$TAG"
+            docker pull $IMAGE_NAME:$TAG
+
 
       - name: Run reload.sh
         run: |
