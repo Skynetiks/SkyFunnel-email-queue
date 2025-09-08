@@ -22,6 +22,7 @@ jobs:
       # 3️⃣ Set image tag
           - name: Pull latest Docker image
             run: |
+                echo "Pulling latest Docker image: $IMAGE_NAME:dev"
                 docker pull $IMAGE_NAME:dev
 
           - name: Run reload.sh
@@ -45,6 +46,7 @@ jobs:
         # 3️⃣ Set image tag
           - name: Pull latest Docker image
             run: |
+                echo "Pulling latest Docker image: $IMAGE_NAME:prod"
                 docker pull $IMAGE_NAME:prod
 
 
