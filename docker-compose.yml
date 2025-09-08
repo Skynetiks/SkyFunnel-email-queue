@@ -1,6 +1,6 @@
 services:
   server:
-    build: .
+    image: ${IMAGE_NAME}:latest
     command: ["npm", "run", "start:server"]
     ports:
       - "3000:3000"
@@ -17,7 +17,7 @@ services:
       start_period: 40s
 
   worker:
-    build: .
+    image: ${IMAGE_NAME}:latest
     command: ["npm", "run", "start:worker"]
     env_file:
       - .env
