@@ -3,7 +3,8 @@ name: CI
 on:
   push:
     branches:
-      - dev         # triggers CI on direct commits to dev
+      - main
+      - dev
 
 jobs:
   docker:
