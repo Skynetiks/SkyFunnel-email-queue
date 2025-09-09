@@ -17,7 +17,7 @@ services:
       start_period: 40s
 
   worker:
-    image: ${IMAGE_NAME}:{IMAGE_TAG}
+    image: ${IMAGE_NAME}:${IMAGE_TAG}
     command: ["npm", "run", "start:worker"]
     env_file:
       - .env
