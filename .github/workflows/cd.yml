@@ -28,7 +28,7 @@ jobs:
           - name: Run reload.sh
             run: |
                 chmod +x /home/actions/scripts/reload.sh
-                /home/actions/scripts/reload.sh
+                sudo /home/actions/scripts/reload.sh
 
 
     deploy-prod:
@@ -52,5 +52,5 @@ jobs:
 
           - name: Run reload.sh
             run: |
-                   chmod +x /home/actions/scripts/reload.sh
-                   /home/actions/scripts/reload.sh
+                chmod +x /home/actions/scripts/reload.sh
+                sudo /home/actions/scripts/reload.sh
