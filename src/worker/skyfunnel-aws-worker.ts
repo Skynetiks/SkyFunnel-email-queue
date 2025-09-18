@@ -99,6 +99,7 @@ async function sendEmailAndUpdateStatus(email: Email, campaignOrg: { name: strin
       leadId: email.leadId,
       organizationName: campaignOrg.name,
       subscriptionType: orgSubscription.leadManagementModuleType,
+      leadDoubleOptInToken: email.leadDoubleOptInToken || "",
     });
 
     const emailSubject = getEmailSubject({
@@ -131,7 +132,6 @@ async function sendEmailAndUpdateStatus(email: Email, campaignOrg: { name: strin
     };
 
     const unsubscribeLink = getUnsubscribeLink(hasUnsubscribeLink, unsubscribeTokenPayload);
-
     const emailSent = await sendEmailSES({
       senderEmail: email.senderEmail,
       senderName: campaign.senderName,
