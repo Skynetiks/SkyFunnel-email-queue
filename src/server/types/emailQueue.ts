@@ -23,6 +23,7 @@ export const EmailSchema = z.object({
   leadFirstName: z.string().optional().nullable(),
   leadLastName: z.string().optional().nullable(),
   leadEmail: z.string(),
+  leadDoubleOptInToken: z.string().optional().nullable(),
   senderId: z.string(),
   senderEmail: z.string(),
   leadCompanyName: z.string().nullable(),
