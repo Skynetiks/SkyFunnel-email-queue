@@ -15,6 +15,7 @@ type Params = {
   leadId: string;
   subscriptionType: TSubscriptionType;
   organizationName: string;
+  leadDoubleOptInToken: string;
 };
 
 export const getEmailBody = (data: Params) => {
@@ -24,7 +25,7 @@ export const getEmailBody = (data: Params) => {
   );
 
   const unsubscribeKey = `unsubscribe_link`;
-
+  const doubleOptInKey = `doubleoptin_link`;
   const hasUnsubscribeLink = data.rawBodyHTML.includes(unsubscribeKey);
 
   const emailBodyHTML = trackedEmailBodyHTML.replace(/\[\[(\w+)(?:\s*\|\|\s*(.+?))?\]\]/g, (match, key, fallback) => {
@@ -37,6 +38,8 @@ export const getEmailBody = (data: Params) => {
         return data.leadEmail || fallback || "";
       case "companyname":
         return data.leadCompanyName || fallback || "";
+      case doubleOptInKey:
+        return `${process.env.MAIN_APP_BASE_URL}/api/double-opt-in/confirm?token=${data.leadDoubleOptInToken}`;
       case unsubscribeKey:
         return `${process.env.MAIN_APP_BASE_URL}/unsubscribe/${data.leadId}`;
       default:
