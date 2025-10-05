@@ -20,6 +20,7 @@ export async function sendEmailSMTPAdmin(
   body: string,
   replyToEmail?: string,
   attachments?: Attachment[],
+  specificIP?: string,
 ) {
   try {
     if (!process.env.SMTP_HOST) {
@@ -69,8 +70,8 @@ export async function sendEmailSMTPAdmin(
       attachments: attachments,
     } satisfies Options;
 
-    const randomIP = getRandomIP();
-    console.log(`[SMTP] Using IP address: ${randomIP} for email to ${recipient}`);
+    const selectedIP = specificIP || getRandomIP();
+    console.log(`[SMTP] Using IP address: ${selectedIP} for email to ${recipient}`);
 
     const info = await sendNodemailerEmailRaw(
       {
@@ -79,7 +80,7 @@ export async function sendEmailSMTPAdmin(
         secure: true,
         user: process.env.ADMIN_SMTP_EMAIL!,
         pass: process.env.ADMIN_SMTP_PASS!,
-        localAddress: randomIP,
+        localAddress: selectedIP,
       },
       mailOptions,
     );
@@ -257,7 +258,7 @@ type Email = {
   unsubscribeUrl?: string;
 };
 
-export async function sendSMTPEmail(email: Email, smtpCredentials: SMTPCredentials) {
+export async function sendSMTPEmail(email: Email, smtpCredentials: SMTPCredentials, specificIP?: string) {
   const { body, senderEmail, senderName, recipient, subject, replyToEmail, campaignId } = email;
   const plainTextBody = convertHtmlToText(body);
   const campaignIdHtml = campaignId ? `<p style='display:none'>thread::${campaignId}</p>` : "";
@@ -291,9 +292,9 @@ export async function sendSMTPEmail(email: Email, smtpCredentials: SMTPCredentia
     };
   }
 
-  // Get a random IP for this email
-  const randomIP = getRandomIP();
-  console.log(`[SMTP] Using IP address: ${randomIP} for email to ${recipient}`);
+  // Use specific IP if provided, otherwise get a random IP
+  const selectedIP = specificIP || getRandomIP();
+  console.log(`[SMTP] Using IP address: ${selectedIP} for email to ${recipient}`);
 
   const decryptedPass = decryptToken(smtpCredentials.encryptedPass);
   const info = await sendNodemailerEmailRaw(
@@ -303,7 +304,7 @@ export async function sendSMTPEmail(email: Email, smtpCredentials: SMTPCredentia
       secure: smtpCredentials.port === 465,
       user: smtpCredentials.user,
       pass: decryptedPass,
-      localAddress: randomIP,
+      localAddress: selectedIP,
     },
     mailOptions,
   );

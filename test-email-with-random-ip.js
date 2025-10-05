@@ -90,8 +90,8 @@ async function testEmailWithRandomIP() {
     console.log(`   Subject: ${email.subject}`);
     console.log(`   Using IP: ${selectedIP}\n`);
 
-    // Send the email
-    const result = await sendSMTPEmail(email, smtpCredentials);
+    // Send the email using the selected IP
+    const result = await sendSMTPEmail(email, smtpCredentials, selectedIP);
 
     console.log('✅ Email sent successfully!');
     console.log('📊 Result details:');
