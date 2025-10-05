@@ -7,7 +7,7 @@ import { convertHtmlToText } from "./utils";
 import { Debug } from "./debug";
 import { AddSMTPRouteParamsType, SMTPCredentials } from "../server/types/smtpQueue";
 import { decryptToken } from "./decrypt";
-import { ErrorCodesToRetrySMTPEmailAfterOneDay } from "../config";
+import { ErrorCodesToRetrySMTPEmailAfterOneDay, getRandomIP } from "../config";
 import { Job } from "bullmq";
 import { smtpQueue } from "../server/emails";
 import { AppError } from "./errorHandler";
@@ -69,6 +69,9 @@ export async function sendEmailSMTPAdmin(
       attachments: attachments,
     } satisfies Options;
 
+    const randomIP = getRandomIP();
+    console.log(`[SMTP] Using IP address: ${randomIP} for email to ${recipient}`);
+
     const info = await sendNodemailerEmailRaw(
       {
         host: process.env.SMTP_HOST!,
@@ -76,6 +79,7 @@ export async function sendEmailSMTPAdmin(
         secure: true,
         user: process.env.ADMIN_SMTP_EMAIL!,
         pass: process.env.ADMIN_SMTP_PASS!,
+        localAddress: randomIP,
       },
       mailOptions,
     );
@@ -94,6 +98,7 @@ type Credentials = {
   secure: boolean;
   user: string;
   pass: string;
+  localAddress?: string;
 };
 
 class NodemailerTransporter {
@@ -117,12 +122,12 @@ class NodemailerTransporter {
     return this.instance;
   }
 
-  private generateKey({ host, user }: { host: string; user: string }) {
-    return `${host}_${user}`; // Composite key using host and user
+  private generateKey({ host, user, localAddress }: { host: string; user: string; localAddress?: string }) {
+    return `${host}_${user}_${localAddress || "default"}`; // Include localAddress in key
   }
 
-  getOrCreateTransporter({ host, port, secure, user, pass }: Credentials) {
-    const key = this.generateKey({ host, user });
+  getOrCreateTransporter({ host, port, secure, user, pass, localAddress }: Credentials) {
+    const key = this.generateKey({ host, user, localAddress });
 
     if (this.transporters.has(key)) {
       // Update lastUsed timestamp and return existing transporter
@@ -132,8 +137,8 @@ class NodemailerTransporter {
     }
 
     try {
-      // Create a new transporter
-      const transporter = nodemailer.createTransport({
+      // Create a new transporter with localAddress support
+      const transporterConfig = {
         host,
         port,
         secure,
@@ -143,7 +148,15 @@ class NodemailerTransporter {
         logger: process.env.NODE_ENV === "development" && process.env.SMTP_DEBUG !== "false",
         maxConnections: 5, // Limit connections
         maxMessages: 100,
-      });
+      };
+
+      // Add localAddress if provided
+      if (localAddress) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (transporterConfig as any).localAddress = localAddress;
+      }
+
+      const transporter = nodemailer.createTransport(transporterConfig);
 
       this.transporters.set(key, { transporter, lastUsed: Date.now() });
       return transporter;
@@ -153,8 +166,8 @@ class NodemailerTransporter {
     }
   }
 
-  getTransporter({ host, user }: { host: string; user: string }) {
-    const key = this.generateKey({ host, user });
+  getTransporter({ host, user, localAddress }: { host: string; user: string; localAddress?: string }) {
+    const key = this.generateKey({ host, user, localAddress });
     const entry = this.transporters.get(key);
     if (entry) {
       entry.lastUsed = Date.now(); // Update lastUsed timestamp
@@ -163,8 +176,8 @@ class NodemailerTransporter {
     return null;
   }
 
-  closeTransporter({ host, user }: { host: string; user: string }) {
-    const key = this.generateKey({ host, user });
+  closeTransporter({ host, user, localAddress }: { host: string; user: string; localAddress?: string }) {
+    const key = this.generateKey({ host, user, localAddress });
     const entry = this.transporters.get(key);
 
     if (entry) {
@@ -217,10 +230,10 @@ class NodemailerTransporter {
   }
 }
 
-async function sendNodemailerEmailRaw({ host, port, secure, user, pass }: Credentials, options: Options) {
+async function sendNodemailerEmailRaw({ host, port, secure, user, pass, localAddress }: Credentials, options: Options) {
   const instance = NodemailerTransporter.getInstance();
 
-  const transporter = instance.getOrCreateTransporter({ host, port, secure, user, pass });
+  const transporter = instance.getOrCreateTransporter({ host, port, secure, user, pass, localAddress });
   if (!transporter) {
     throw new AppError("INTERNAL_SERVER_ERROR", "Failed to create transporter");
   }
@@ -229,7 +242,7 @@ async function sendNodemailerEmailRaw({ host, port, secure, user, pass }: Creden
     const info = await transporter.sendMail(options);
     return info as SMTPTransport.SentMessageInfo;
   } finally {
-    instance?.closeTransporter({ host, user });
+    instance?.closeTransporter({ host, user, localAddress });
   }
 }
 
@@ -278,6 +291,10 @@ export async function sendSMTPEmail(email: Email, smtpCredentials: SMTPCredentia
     };
   }
 
+  // Get a random IP for this email
+  const randomIP = getRandomIP();
+  console.log(`[SMTP] Using IP address: ${randomIP} for email to ${recipient}`);
+
   const decryptedPass = decryptToken(smtpCredentials.encryptedPass);
   const info = await sendNodemailerEmailRaw(
     {
@@ -286,6 +303,7 @@ export async function sendSMTPEmail(email: Email, smtpCredentials: SMTPCredentia
       secure: smtpCredentials.port === 465,
       user: smtpCredentials.user,
       pass: decryptedPass,
+      localAddress: randomIP,
     },
     mailOptions,
   );
