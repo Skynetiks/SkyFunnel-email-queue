@@ -13,10 +13,9 @@ import { sendSMTPEmail } from "../lib/smtp";
 import { addAdminEmailsToQueue } from "./admin-email.js";
 import { skyfunnelSesQueue, smtpQueue } from "./emails";
 import authMiddleware from "./middlewares/auth.js";
-import { clearCacheOrganizationSchema, sesInputSchema, smtpInputSchema } from "./types/email";
+import { clearCacheOrganizationSchema, smtpInputSchema } from "./types/email";
 import { AddBulkSkyfunnelSesRouteParamsSchema, AddSESEmailRouteParamsSchema } from "./types/emailQueue.js";
 import { AddBulkSMTPRouteParamsSchema, AddSMTPRouteParamsSchema } from "./types/smtpQueue.js";
-import { sendEmailSES } from "../lib/aws.js";
 import { clearCache } from "../db/emailQueries.js";
 
 dotenv.config();
@@ -255,26 +254,26 @@ app.post("/ses/add-email", async (req, res, next) => {
   }
 });
 
-app.post("/ses/send-email", async (req, res, next) => {
-  try {
-    const { success, data, error: ZodError } = sesInputSchema.safeParse(req.body);
+// app.post("/ses/send-email", async (req, res, next) => {
+//   try {
+//     const { success, data, error: ZodError } = sesInputSchema.safeParse(req.body);
 
-    if (!success) {
-      throw new AppError("BAD_REQUEST", ZodError.errors[0].path[0] + ": " + ZodError.errors[0].message);
-    }
+//     if (!success) {
+//       throw new AppError("BAD_REQUEST", ZodError.errors[0].path[0] + ": " + ZodError.errors[0].message);
+//     }
 
-    const { emailBody, receiverEmail, senderEmail, subject, replyToEmail, senderName } = data.emailDetails;
-    await sendEmailSES({ body: emailBody, recipient: receiverEmail, senderEmail, senderName, subject, replyToEmail });
+//     const { emailBody, receiverEmail, senderEmail, subject, replyToEmail, senderName } = data.emailDetails;
+//     await sendEmailSES({ body: emailBody, recipient: receiverEmail, senderEmail, senderName, subject, replyToEmail });
 
-    res.status(200).json({
-      success: true,
-      message: "Email sent",
-      sent: true,
-    });
-  } catch (error) {
-    next(error);
-  }
-});
+//     res.status(200).json({
+//       success: true,
+//       message: "Email sent",
+//       sent: true,
+//     });
+//   } catch (error) {
+//     next(error);
+//   }
+// });
 
 app.post("/organization/clear-cache", async (req, res, next) => {
   try {

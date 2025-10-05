@@ -241,6 +241,7 @@ type Email = {
   body: string;
   replyToEmail?: string;
   campaignId?: string;
+  unsubscribeUrl?: string;
 };
 
 export async function sendSMTPEmail(email: Email, smtpCredentials: SMTPCredentials) {
@@ -259,6 +260,12 @@ export async function sendSMTPEmail(email: Email, smtpCredentials: SMTPCredentia
     text: plainTextBodyWithCampaignId,
     html: html,
     replyTo: replyToEmail || senderEmail,
+    headers: {
+      ...(email.unsubscribeUrl && {
+        "List-Unsubscribe": `<${email.unsubscribeUrl}>`,
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+      }),
+    },
     attachDataUrls: true,
   } satisfies Options;
 
