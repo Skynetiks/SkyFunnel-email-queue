@@ -73,14 +73,15 @@ async function testEmailWithRandomIP() {
       campaignId: 'test-random-ip-' + Date.now()
     };
 
-    // Prepare SMTP credentials (using plain text password for test)
+    // Import encryptToken to encrypt the password for testing
+    const { encryptToken } = await import('./dist/lib/decrypt.js');
+    
+    // Prepare SMTP credentials (encrypt the password for proper handling)
     const smtpCredentials = {
       host: process.env.SMTP_HOST,
       port: parseInt(process.env.SMTP_PORT),
       user: process.env.SMTP_USER,
-      // For this test, we'll use the password directly without encryption
-      // In production, you would use encryptedPass with the decryptToken function
-      encryptedPass: process.env.SMTP_PASS // This will be treated as plain text in our modified test
+      encryptedPass: encryptToken(process.env.SMTP_PASS) // Encrypt the password
     };
 
     console.log('📧 Sending test email...');
