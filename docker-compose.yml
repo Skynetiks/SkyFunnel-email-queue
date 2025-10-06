@@ -1,27 +1,20 @@
 version: "3.9"
 
 services:
-  # ---------------------------------------------
-  # API Server (exposes port 3000 to the outside)
-  # ---------------------------------------------
+  # Server: HTTP API, exposed normally
   server:
     image: ${IMAGE_NAME:-skyfunnel-email-queue}:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile
     command: ["npm", "run", "start:server"]
-    
-    # Use Docker's bridge network (default)
-    # and explicitly expose the port to the host
     ports:
-      - "3000:3000"
-    
+      - "3000:3000"   # expose API to outside world
     env_file:
       - .env
     environment:
       - PORT=3000
     restart: always
-
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
@@ -29,9 +22,7 @@ services:
       retries: 3
       start_period: 40s
 
-  # ---------------------------------------------
-  # Worker (connects to Redis/SMTP directly)
-  # ---------------------------------------------
+  # Worker: needs host networking for SMTP/Redis
   worker:
     image: ${IMAGE_NAME:-skyfunnel-email-queue}:${IMAGE_TAG:-latest}
     build:
@@ -41,7 +32,4 @@ services:
     env_file:
       - .env
     restart: always
-
-    # Worker benefits from host networking
-    # since it might need to connect to local services
-    network_mode: host
+    network_mode: host   # REQUIRED for SMTP bind to host IP
