@@ -175,7 +175,7 @@ export const clearCache = async <T extends CACHE_CLEAR_TYPE>(
 };
 
 // SMTP Credentials functions
-export const getSmtpCredentials = async (senderId: string): Promise<SMTPCredentialsForAPI | null> => {
+export const getSmtpCredentials = async (senderEmail: string): Promise<SMTPCredentialsForAPI | null> => {
   const response = (await query(
     `SELECT 
       user,
@@ -183,11 +183,9 @@ export const getSmtpCredentials = async (senderId: string): Promise<SMTPCredenti
       port,
       secure,
       pass,
-      "ownerId",
-      "integrationId"
     FROM "SMTP" 
     WHERE user = $1`,
-    [senderId],
+    [senderEmail],
   )) as QueryResult<SMTPCredentials>;
 
   if (response.rows.length === 0) {

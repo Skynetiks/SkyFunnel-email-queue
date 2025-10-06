@@ -56,7 +56,7 @@ const handleJob = async (job: Job) => {
 async function getSmtpCredentials(email: Email) {
   const smtpCredentials = await cache__getSmtpCredentials(email.senderEmail);
   if (!smtpCredentials) {
-    throw new AppError("NOT_FOUND", `SMTP credentials not found for senderId: ${email.senderId}`);
+    throw new AppError("NOT_FOUND", `SMTP credentials not found for senderEmail: ${email.senderEmail}`);
   }
   return smtpCredentials;
 }
