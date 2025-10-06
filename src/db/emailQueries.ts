@@ -178,13 +178,13 @@ export const clearCache = async <T extends CACHE_CLEAR_TYPE>(
 export const getSmtpCredentials = async (senderEmail: string): Promise<SMTPCredentialsForAPI | null> => {
   const response = (await query(
     `SELECT 
-      user,
+      "user",
       host,
       port,
       secure,
       pass
     FROM "SMTP" 
-    WHERE user = $1`,
+    WHERE "user" = $1`,
     [senderEmail],
   )) as QueryResult<SMTPCredentials>;
 
