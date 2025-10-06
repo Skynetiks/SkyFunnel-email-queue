@@ -182,7 +182,7 @@ export const getSmtpCredentials = async (senderEmail: string): Promise<SMTPCrede
       host,
       port,
       secure,
-      pass,
+      pass
     FROM "SMTP" 
     WHERE user = $1`,
     [senderEmail],
