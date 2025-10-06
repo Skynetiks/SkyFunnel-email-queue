@@ -1,13 +1,12 @@
 services:
-  # Server: HTTP API, exposed normally
   server:
     image: ${IMAGE_NAME:-skyfunnel-email-queue}:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile
     command: ["npm", "run", "start:server"]
-    ports:
-      - "3000:3000"   # expose API to outside world
+    network_mode: host  # Add this
+    # Remove the ports section - not needed with host mode
     env_file:
       - .env
     environment:
@@ -20,7 +19,6 @@ services:
       retries: 3
       start_period: 40s
 
-  # Worker: needs host networking for SMTP/Redis
   worker:
     image: ${IMAGE_NAME:-skyfunnel-email-queue}:${IMAGE_TAG:-latest}
     build:
@@ -30,4 +28,4 @@ services:
     env_file:
       - .env
     restart: always
-    network_mode: host   # REQUIRED for SMTP bind to host IP
+    network_mode: host
