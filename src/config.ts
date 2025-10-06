@@ -75,18 +75,8 @@ export const ADMIN_DEFAULT_JOB_OPTIONS = {
 
 // ============================== IP Pool Configuration ==============================
 
-export const IP_POOL = [
-  "51.195.171.32",
-  "51.195.171.27",
-  "51.195.171.216",
-  "51.195.171.214",
-  "51.195.171.187",
-  "51.195.171.186",
-  "51.195.171.131",
-  "51.195.171.130",
-  "51.195.171.129",
-  "51.195.252.170",
-];
+export const IP_POOL = JSON.parse(process.env.IP_POOL || "[]");
+
 
 export const getRandomIP = (): string => {
   const randomIndex = Math.floor(Math.random() * IP_POOL.length);
