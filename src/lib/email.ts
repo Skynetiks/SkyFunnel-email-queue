@@ -1,4 +1,4 @@
-import { getHeader } from "../worker/template";
+import { getFooter, getHeader } from "../worker/template";
 import { generateUnsubscribeToken, UnsubscribeTokenPayload } from "./token";
 import { replaceUrlsInEmailHtml } from "./utils";
 
@@ -47,10 +47,10 @@ export const getEmailBody = (data: Params) => {
     }
   });
 
-  //   const footer = getFooter(data.organizationName, data.leadId, data.subscriptionType);
+  const footer = getFooter(data.organizationName, data.leadId, data.subscriptionType);
   const header = getHeader(data.campaignId, data.emailId);
 
-  return { emailBodyHTML, header, hasUnsubscribeLink };
+  return { emailBodyHTML, header, hasUnsubscribeLink, footer };
 };
 
 interface GetEmailSubjectParams {

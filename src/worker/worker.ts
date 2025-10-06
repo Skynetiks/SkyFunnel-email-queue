@@ -2,7 +2,12 @@ import { Job, Worker } from "bullmq";
 import { QUEUE_CONFIG, SMTP_EMAIL_QUEUE_KEY } from "../config";
 import { query } from "../lib/db";
 import { AppError, errorHandler } from "../lib/errorHandler";
-import { cache__getCampaignById, cache__getOrganizationSubscription, getSuppressedEmail } from "../db/emailQueries";
+import {
+  cache__getCampaignById,
+  cache__getOrganizationSubscription,
+  getSuppressedEmail,
+  cache__getSmtpCredentials,
+} from "../db/emailQueries";
 import { getEmailBody, getEmailSubject, getUnsubscribeLink, maskEmail } from "../lib/email";
 import {
   Days,
@@ -12,9 +17,8 @@ import {
   isWithinPeriod,
 } from "../lib/utils";
 import { Debug } from "../lib/debug";
-import { AddSMTPRouteParamsSchema, AddSMTPRouteParamsType, SMTPCredentials } from "../server/types/smtpQueue";
+import { AddSMTPRouteParamsSchema, AddSMTPRouteParamsType, Email } from "../server/types/smtpQueue";
 import { sendSMTPEmail, smtpErrorHandler } from "../lib/smtp";
-import { Email } from "../server/types/emailQueue";
 import { usageRedisStore } from "../lib/usageRedisStore";
 import { UnsubscribeTokenPayload } from "../lib/token";
 
@@ -28,7 +32,7 @@ const handleJob = async (job: Job) => {
       throw new AppError("BAD_REQUEST", validatedData.error.errors[0].message);
     }
 
-    const { email, campaignOrg, smtpCredentials } = validatedData.data;
+    const { email, campaignOrg } = validatedData.data;
     const { startTimeInUTC, endTimeInUTC, activeDays, timezone } = email;
 
     const isWithinPeriodValue = isWithinPeriod(startTimeInUTC, endTimeInUTC);
@@ -43,20 +47,28 @@ const handleJob = async (job: Job) => {
       return;
     }
 
-    await sendEmailAndUpdateStatus(email, campaignOrg, smtpCredentials, job);
+    await sendEmailAndUpdateStatus(email, campaignOrg, job);
   } catch (error) {
     errorHandler(error, true);
   }
 };
 
+async function getSmtpCredentials(email: Email) {
+  const smtpCredentials = await cache__getSmtpCredentials(email.senderId);
+  if (!smtpCredentials) {
+    throw new AppError("NOT_FOUND", `SMTP credentials not found for senderId: ${email.senderId}`);
+  }
+  return smtpCredentials;
+}
+
 async function sendEmailAndUpdateStatus(
   email: Email,
   campaignOrg: { name: string; id: string },
-  smtpCredentials: SMTPCredentials,
   job: Job<AddSMTPRouteParamsType>,
 ) {
   const organizationId = campaignOrg.id;
   const campaignPromise = cache__getCampaignById(email.emailCampaignId, campaignOrg.id);
+  const smtpCredentials = await getSmtpCredentials(email);
   const organizationSubscriptionPromise = await cache__getOrganizationSubscription(organizationId);
 
   const [campaign, organizationSubscription] = await Promise.all([campaignPromise, organizationSubscriptionPromise]);
@@ -86,7 +98,7 @@ async function sendEmailAndUpdateStatus(
 
   const suppressedResults = await getSuppressedEmail(email.leadEmail);
 
-  const { emailBodyHTML, header, hasUnsubscribeLink } = getEmailBody({
+  const { emailBodyHTML, header, hasUnsubscribeLink, footer } = getEmailBody({
     campaignId: email.emailCampaignId,
     rawBodyHTML: campaign.campaignContentType === "TEXT" ? campaign.plainTextBody : campaign.bodyHTML,
     emailId: email.id,
@@ -139,7 +151,7 @@ async function sendEmailAndUpdateStatus(
       {
         senderEmail: campaign.senderEmail,
         senderName: campaign.senderName,
-        body: header + emailBodyHTML,
+        body: header + emailBodyHTML + footer,
         recipient: email.leadEmail,
         subject: emailSubject,
         replyToEmail: campaign.replyToEmail,

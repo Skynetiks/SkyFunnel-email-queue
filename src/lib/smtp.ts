@@ -268,7 +268,7 @@ export async function sendSMTPEmail(email: Email, smtpCredentials: SMTPCredentia
   // Prepare the email options
   const mailOptions = {
     from: `${senderName} <${senderEmail}>`,
-    sender: process.env.ADMIN_SMTP_EMAIL,
+    sender: senderEmail,
     to: recipient,
     subject: subject,
     text: plainTextBodyWithCampaignId,
