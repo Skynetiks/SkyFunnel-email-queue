@@ -93,7 +93,7 @@ export const getCampaignById = async (campaignId: string) => {
             ec."campaignContentType",
             ec."plainTextBody",
             ect."bodyHTML",
-            ec."sendIdentity",
+            ec."senderIdentity",
             ec."senderName",
             ec.subject,
             ec."replyToEmail"
