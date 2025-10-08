@@ -149,7 +149,7 @@ async function sendEmailAndUpdateStatus(
   try {
     const emailSent = await sendSMTPEmail(
       {
-        senderEmail: campaign.senderEmail,
+        senderEmail: email.senderEmail,
         senderName: campaign.senderName,
         body: header + emailBodyHTML + footer,
         recipient: email.leadEmail,
