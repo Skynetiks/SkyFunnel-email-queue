@@ -155,7 +155,7 @@ class SMTPQueue extends BaseEmailQueue {
 
     const jobs = emails.map((email, index) => {
       const actualInterval = includeDelay ? generateRandomDelay(interval) : interval * 1000;
-      const delay = batchDelay + index * actualInterval;
+      const delay = batchDelay * 1000 + index * actualInterval;
       const jobId = generateJobId(email.emailCampaignId, email.id, "SMTP");
 
       return {
