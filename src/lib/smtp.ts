@@ -256,10 +256,11 @@ type Email = {
   replyToEmail?: string;
   campaignId?: string;
   unsubscribeUrl?: string;
+  attachments?: Attachment[];
 };
 
 export async function sendSMTPEmail(email: Email, smtpCredentials: SMTPCredentials, specificIP?: string) {
-  const { body, senderEmail, senderName, recipient, subject, replyToEmail, campaignId } = email;
+  const { body, senderEmail, senderName, recipient, subject, replyToEmail, campaignId, attachments } = email;
   const plainTextBody = convertHtmlToText(body);
   const campaignIdHtml = campaignId ? `<p style='display:none'>thread::${campaignId}</p>` : "";
   const plainTextBodyWithCampaignId = campaignId ? `${plainTextBody} thread::${campaignId}` : plainTextBody;
@@ -281,6 +282,7 @@ export async function sendSMTPEmail(email: Email, smtpCredentials: SMTPCredentia
       }),
     },
     attachDataUrls: true,
+    attachments: attachments || [],
   } satisfies Options;
 
   if (process.env.SKIP_SMTP_SEND === "SKIP") {

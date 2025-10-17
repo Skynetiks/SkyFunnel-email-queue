@@ -141,10 +141,10 @@ app.post("/smtp/send-email", async (req, res, next) => {
     }
 
     const { smtpCredentials } = data;
-    const { emailBody, receiverEmail, subject, senderEmail, replyToEmail, senderName } = data.emailDetails;
+    const { emailBody, receiverEmail, subject, senderEmail, replyToEmail, senderName, attachments } = data.emailDetails;
 
     await sendSMTPEmail(
-      { body: emailBody, recipient: receiverEmail, senderEmail, replyToEmail, subject, senderName },
+      { body: emailBody, recipient: receiverEmail, senderEmail, replyToEmail, subject, senderName, attachments },
       smtpCredentials,
     );
 
