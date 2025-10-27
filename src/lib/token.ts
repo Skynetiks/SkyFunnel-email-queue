@@ -7,7 +7,9 @@ type BasePayload = {
 
 export type UnsubscribeTokenPayload = {
   email: string;
-  leadId: string;
+  recipientType: "CLIENT" | "LEAD";
+  leadId?: string | null;
+  clientId?: string | null;
   campaignId: string;
   type: "unsubscribe" | "subscribe";
   reason: string;

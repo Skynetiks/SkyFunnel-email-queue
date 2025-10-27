@@ -18,15 +18,17 @@ const isValidTimeFormatRefine = (
 
 export const EmailSchema = z.object({
   id: z.string(),
-  leadId: z.string(),
+  clientId: z.string().optional().nullable(),
+  leadId: z.string().optional().nullable(),
+  recipientType: z.enum(["CLIENT", "LEAD"]),
   emailCampaignId: z.string(),
-  leadFirstName: z.string().optional().nullable(),
-  leadLastName: z.string().optional().nullable(),
-  leadEmail: z.string(),
+  firstName: z.string().optional().nullable(),
+  lastName: z.string().optional().nullable(),
+  email: z.string(),
   leadDoubleOptInToken: z.string().optional().nullable(),
   senderId: z.string(),
   senderEmail: z.string(),
-  leadCompanyName: z.string().nullable(),
+  companyName: z.string().nullable(),
   status: z.string(),
   timestamp: z.string().datetime().optional(),
   startTimeInUTC: z

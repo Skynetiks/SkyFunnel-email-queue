@@ -96,25 +96,29 @@ async function sendEmailAndUpdateStatus(
     return;
   }
 
-  const suppressedResults = await getSuppressedEmail(email.leadEmail);
+  const suppressedResults = await getSuppressedEmail(email.email);
 
   const { emailBodyHTML, header, hasUnsubscribeLink, footer } = getEmailBody({
     campaignId: email.emailCampaignId,
     rawBodyHTML: campaign.campaignContentType === "TEXT" ? campaign.plainTextBody : campaign.bodyHTML,
     emailId: email.id,
-    leadFirstName: email.leadFirstName || "",
-    leadLastName: email.leadLastName || "",
-    leadEmail: email.leadEmail,
-    leadCompanyName: email.leadCompanyName || "",
+    firstName: email.firstName || "",
+    lastName: email.lastName || "",
+    email: email.email,
+    companyName: email.companyName || "",
+    recipientType: email.recipientType,
     leadId: email.leadId,
+    clientId: email.clientId,
     organizationName: campaignOrg.name,
     subscriptionType: organizationSubscription.leadManagementModuleType,
     leadDoubleOptInToken: email.leadDoubleOptInToken || "",
   });
 
   const unsubscribeTokenPayload: UnsubscribeTokenPayload = {
+    recipientType: email.recipientType,
     leadId: email.leadId,
-    email: maskEmail(email.leadEmail),
+    clientId: email.clientId,
+    email: maskEmail(email.email),
     campaignId: email.emailCampaignId,
     reason: "User clicked the unsubscribe link/button in their email client",
     type: "unsubscribe",
@@ -124,10 +128,10 @@ async function sendEmailAndUpdateStatus(
 
   const emailSubject = getEmailSubject({
     subject: campaign.subject,
-    leadFirstName: email.leadFirstName || "",
-    leadLastName: email.leadLastName || "",
-    leadEmail: email.leadEmail,
-    leadCompanyName: email.leadCompanyName || "",
+    firstName: email.firstName || "",
+    lastName: email.lastName || "",
+    email: email.email,
+    companyName: email.companyName || "",
   });
 
   if (suppressedResults) {
@@ -152,7 +156,7 @@ async function sendEmailAndUpdateStatus(
         senderEmail: email.senderEmail,
         senderName: campaign.senderName,
         body: header + emailBodyHTML + footer,
-        recipient: email.leadEmail,
+        recipient: email.email,
         subject: emailSubject,
         replyToEmail: campaign.replyToEmail,
         campaignId: email.emailCampaignId,
@@ -166,7 +170,7 @@ async function sendEmailAndUpdateStatus(
         "UPDATING STATUS FOR THE Email WITH MESSAGE_ID:",
         emailSent.messageId,
         "AND RECIPIENT:",
-        email.leadEmail,
+        email.email,
       );
       const updateEmailResult = query('UPDATE "Email" SET  status = $1, "messageId" = $2 WHERE id = $3', [
         "SENT",
@@ -190,7 +194,7 @@ async function sendEmailAndUpdateStatus(
     } else {
       console.error(
         "[SMTP_WORKER] Error While Sending Emails via Smtp for",
-        email.leadEmail,
+        email.email,
         emailSent ? emailSent.response : "",
       );
       throw new AppError("INTERNAL_SERVER_ERROR", "Email not sent by SMTP");

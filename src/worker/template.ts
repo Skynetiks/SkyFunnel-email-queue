@@ -1,6 +1,6 @@
 import { TSubscriptionType } from "../lib/email";
 
-export const getFooter = (organizationName: string, leadId: string, subscriptionType: TSubscriptionType) => {
+export const getFooter = (subscriptionType: TSubscriptionType) => {
   const INCLUDE_SKYFUNNEL_BRANDING = ["FREE", "BASIC"];
 
   return `

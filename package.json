@@ -5,10 +5,9 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "start": "concurrently \"npm run start:server\" \"npm run start:worker\" \"npm run start:admin-worker\"",
+    "start": "concurrently \"npm run start:server\" \"npm run start:worker\"",
     "start:server": "tsx src/server/index.ts",
     "start:worker": "tsx src/worker/worker.ts",
-    "start:admin-worker": "tsx src/admin-worker/worker.ts",
     "dev": "nodemon",
     "lint": "eslint src",
     "build": "npm run format && npm run lint && tsc",

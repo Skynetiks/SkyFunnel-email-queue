@@ -8,11 +8,13 @@ type Params = {
   campaignId: string;
   rawBodyHTML: string;
   emailId: string;
-  leadFirstName: string;
-  leadLastName: string;
-  leadEmail: string;
-  leadCompanyName: string;
-  leadId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  companyName: string;
+  recipientType: "CLIENT" | "LEAD";
+  leadId: string | undefined | null;
+  clientId?: string | undefined | null;
   subscriptionType: TSubscriptionType;
   organizationName: string;
   leadDoubleOptInToken: string;
@@ -31,23 +33,23 @@ export const getEmailBody = (data: Params) => {
   const emailBodyHTML = trackedEmailBodyHTML.replace(/\[\[(\w+)(?:\s*\|\|\s*(.+?))?\]\]/g, (match, key, fallback) => {
     switch (key.toLowerCase()) {
       case "firstname":
-        return data.leadFirstName || fallback || "";
+        return data.firstName || fallback || "";
       case "lastname":
-        return data.leadLastName || fallback || "";
+        return data.lastName || fallback || "";
       case "email":
-        return data.leadEmail || fallback || "";
+        return data.email || fallback || "";
       case "companyname":
-        return data.leadCompanyName || fallback || "";
+        return data.companyName || fallback || "";
       case doubleOptInKey:
         return `${process.env.MAIN_APP_BASE_URL}/api/double-opt-in/confirm?token=${data.leadDoubleOptInToken}`;
       case unsubscribeKey:
-        return `${process.env.MAIN_APP_BASE_URL}/unsubscribe/${data.leadId}`;
+        return `${process.env.MAIN_APP_BASE_URL}/unsubscribe/${data.recipientType.toLocaleLowerCase()}/${data.leadId}`;
       default:
         return fallback || "";
     }
   });
 
-  const footer = getFooter(data.organizationName, data.leadId, data.subscriptionType);
+  const footer = getFooter(data.subscriptionType);
   const header = getHeader(data.campaignId, data.emailId);
 
   return { emailBodyHTML, header, hasUnsubscribeLink, footer };
@@ -55,23 +57,23 @@ export const getEmailBody = (data: Params) => {
 
 interface GetEmailSubjectParams {
   subject: string;
-  leadFirstName: string;
-  leadLastName: string;
-  leadEmail: string;
-  leadCompanyName: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  companyName: string;
 }
 
 export const getEmailSubject = (data: GetEmailSubjectParams) => {
   const emailSubject = data.subject.replace(/\[\[(\w+)(?:\s*\|\|\s*(.+?))?\]\]/g, (match, key, fallback) => {
     switch (key.toLowerCase()) {
       case "firstname":
-        return data.leadFirstName || fallback || "";
+        return data.firstName || fallback || "";
       case "lastname":
-        return data.leadLastName || fallback || "";
+        return data.lastName || fallback || "";
       case "email":
-        return data.leadEmail || fallback || "";
+        return data.email || fallback || "";
       case "companyname":
-        return data.leadCompanyName || fallback || "";
+        return data.companyName || fallback || "";
       default:
         return fallback || "";
     }
