@@ -1,4 +1,3 @@
-import { AddBulkSkyfunnelSesRouteParamType, AddSESEmailRouteParamsType, SESJobOptions } from "./types/emailQueue";
 import { Job, JobType, Queue } from "bullmq";
 import { DEFAULT_JOB_OPTIONS, DefaultPrioritySlug, getPriority, PAUSE_CAMPAIGN_LIST_KEY } from "../config";
 import { AppError } from "../lib/errorHandler";
@@ -84,9 +83,9 @@ class BaseEmailQueue {
     });
 
     //add new job with the currents job data and delay
-    const { email, campaignOrg, smtpCredentials } = currentJob.data;
+    const { email, campaignOrg } = currentJob.data;
     try {
-      await smtpQueue.addEmailToQueue({ email, campaignOrg, smtpCredentials }, "default", delayInSeconds);
+      await smtpQueue.addEmailToQueue({ email, campaignOrg }, "default", delayInSeconds);
       console.log(`[SMTP_WORKER] New delayed job added to queue with a delay of ${delayInSeconds * 1000} ms`);
     } catch (moveError) {
       console.error("[SMTP_WORKER] Failed to add job to queue", moveError);
@@ -128,123 +127,7 @@ class BaseEmailQueue {
     console.timeEnd();
     return jobsToCancel.length;
   }
-
-  // async pauseCampaign(campaignId: string) {
-  //   const redisClient = await getRedisConnection();
-  //   if (!redisClient) {
-  //     throw new AppError("INTERNAL_SERVER_ERROR", "Redis not initialized Successfully", false, "HIGH");
-  //   }
-
-  //   const isPaused = await this.isCampaignPaused(campaignId);
-  //   if (isPaused) {
-  //     throw new AppError("BAD_REQUEST", "Campaign is already paused");
-  //   }
-
-  //   const response = await redisClient.sadd(PAUSE_CAMPAIGN_LIST_KEY, campaignId);
-  //   if (!response) {
-  //     throw new AppError("INTERNAL_SERVER_ERROR", "Something Went Wrong while pausing campaign", false, "HIGH");
-  //   }
-
-  //   return true;
-  // }
-
-  // async resumeCampaign(campaignId: string) {
-  //   const redisClient = await getRedisConnection();
-  //   if (!redisClient) {
-  //     throw new AppError("INTERNAL_SERVER_ERROR", "Redis not initialized Successfully", false, "HIGH");
-  //   }
-
-  //   const isPaused = await this.isCampaignPaused(campaignId);
-  //   if (!isPaused) {
-  //     throw new AppError("BAD_REQUEST", "Campaign is not paused");
-  //   }
-
-  //   const response = await redisClient.srem(PAUSE_CAMPAIGN_LIST_KEY, campaignId);
-  //   if (!response) {
-  //     throw new AppError("INTERNAL_SERVER_ERROR", "Something Went Wrong while resuming campaign", false, "HIGH");
-  //   }
-
-  //   return true;
-  // }
-
-  // async getPausedCampaigns() {
-  //   const redisClient = await getRedisConnection();
-  //   if (!redisClient) {
-  //     throw new AppError("INTERNAL_SERVER_ERROR", "Redis not initialized Successfully", false, "HIGH");
-  //   }
-
-  //   const pausedCampaigns = await redisClient.smembers(PAUSE_CAMPAIGN_LIST_KEY);
-  //   return pausedCampaigns;
-  // }
-
-  // async isCampaignPaused(campaignId: string) {
-  //   const redisClient = await getRedisConnection();
-  //   if (!redisClient) {
-  //     throw new AppError("INTERNAL_SERVER_ERROR", "Redis not initialized Successfully", false, "HIGH");
-  //   }
-
-  //   const isPaused = await redisClient.sismember(PAUSE_CAMPAIGN_LIST_KEY, campaignId);
-  //   return !!isPaused;
-  // }
 }
-
-class SkyFunnelSESQueue extends BaseEmailQueue {
-  constructor() {
-    const emailQueue = emailQueueManager.getSkyfunnelInstance();
-    if (!emailQueue) {
-      throw new AppError("INTERNAL_SERVER_ERROR", "SkyFunnel Email Queue not initialized", false, "HIGH");
-    }
-    super(emailQueue);
-  }
-
-  async addBulkEmailsToQueue(
-    { campaignOrg, emails, interval, batchDelay, includeDelay }: AddBulkSkyfunnelSesRouteParamType,
-    prioritySlug: string = DefaultPrioritySlug,
-  ) {
-    if (!emails.length || !emails[0]?.emailCampaignId) {
-      throw new AppError("BAD_REQUEST", "Either emails or emailCampaignId is missing");
-    }
-
-    const emailQueue = this.emailQueue;
-    if (!emailQueue) {
-      throw new AppError("INTERNAL_SERVER_ERROR", "Queue not initialized Successfully", false, "HIGH");
-    }
-
-    const priorityNumber = getPriority(prioritySlug);
-    const jobs = emails.map((email, index) => {
-      const actualInterval = includeDelay ? generateRandomDelay(interval) : interval * 1000;
-      const delay = batchDelay + index * actualInterval;
-      const jobId = generateJobId(email.emailCampaignId, email.id, "SES");
-
-      return {
-        name: email.id,
-        data: { email, campaignOrg, actualInterval },
-        opts: { ...DEFAULT_JOB_OPTIONS, delay, jobId, priority: priorityNumber },
-      };
-    }) satisfies SESJobOptions;
-
-    await emailQueue.addBulk(jobs);
-  }
-
-  async addEmailToQueue(
-    { email, campaignOrg }: AddSESEmailRouteParamsType,
-    prioritySlug: string = DefaultPrioritySlug,
-  ) {
-    const emailQueue = this.emailQueue;
-    if (!emailQueue) {
-      throw new AppError("INTERNAL_SERVER_ERROR", "Queue not initialized Successfully", false, "HIGH");
-    }
-
-    const priorityNumber = getPriority(prioritySlug);
-
-    const jobId = generateJobId(email.emailCampaignId, email.id, "SES");
-
-    const data = { email, campaignOrg } satisfies AddSESEmailRouteParamsType;
-    await emailQueue.add(email.id, data, { ...DEFAULT_JOB_OPTIONS, jobId: jobId, priority: priorityNumber });
-  }
-}
-
-export const skyfunnelSesQueue = new SkyFunnelSESQueue();
 
 class SMTPQueue extends BaseEmailQueue {
   constructor() {
@@ -256,7 +139,7 @@ class SMTPQueue extends BaseEmailQueue {
   }
 
   async addBulkEmailsToQueue(
-    { campaignOrg, emails, interval, smtpCredentials, batchDelay, includeDelay }: AddBulkSMTPRouteParamType,
+    { campaignOrg, emails, interval, batchDelay, includeDelay }: AddBulkSMTPRouteParamType,
     prioritySlug: string = DefaultPrioritySlug,
   ) {
     if (!emails.length || !emails[0]?.emailCampaignId) {
@@ -272,12 +155,12 @@ class SMTPQueue extends BaseEmailQueue {
 
     const jobs = emails.map((email, index) => {
       const actualInterval = includeDelay ? generateRandomDelay(interval) : interval * 1000;
-      const delay = batchDelay + index * actualInterval;
+      const delay = batchDelay * 1000 + index * actualInterval;
       const jobId = generateJobId(email.emailCampaignId, email.id, "SMTP");
 
       return {
         name: email.id,
-        data: { email, campaignOrg, smtpCredentials, actualInterval },
+        data: { email, campaignOrg, actualInterval },
         opts: { ...DEFAULT_JOB_OPTIONS, delay, jobId, priority: priorityNumber },
       };
     }) satisfies SMTPJobOptions;
@@ -286,7 +169,7 @@ class SMTPQueue extends BaseEmailQueue {
   }
 
   async addEmailToQueue(
-    { email, campaignOrg, smtpCredentials }: AddSMTPRouteParamsType,
+    { email, campaignOrg }: AddSMTPRouteParamsType,
     prioritySlug: string = DefaultPrioritySlug,
     delayInSeconds: number = 0,
   ) {
@@ -299,7 +182,7 @@ class SMTPQueue extends BaseEmailQueue {
 
     const jobId = generateJobId(email.emailCampaignId, email.id, "SMTP");
 
-    const data = { campaignOrg, email, smtpCredentials } satisfies AddSMTPRouteParamsType;
+    const data = { campaignOrg, email } satisfies AddSMTPRouteParamsType;
 
     const jobOptions = {
       ...DEFAULT_JOB_OPTIONS,

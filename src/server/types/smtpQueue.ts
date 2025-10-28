@@ -1,6 +1,59 @@
 import { z } from "zod";
-import { EmailSchema } from "./emailQueue";
 import { BulkJobOptions } from "bullmq";
+
+const isValidTimeFormatRefine = (
+  val: string | null,
+  ctx: z.RefinementCtx,
+  config: { path: string[]; message: string },
+) => {
+  if (!val) return true;
+  if (val.split(":").length !== 2) {
+    return ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: config.message,
+      path: config.path,
+    });
+  }
+};
+
+export const EmailSchema = z.object({
+  id: z.string(),
+  clientId: z.string().optional().nullable(),
+  leadId: z.string().optional().nullable(),
+  recipientType: z.enum(["CLIENT", "LEAD"]),
+  emailCampaignId: z.string(),
+  firstName: z.string().optional().nullable(),
+  lastName: z.string().optional().nullable(),
+  email: z.string(),
+  leadDoubleOptInToken: z.string().optional().nullable(),
+  senderId: z.string(),
+  senderEmail: z.string(),
+  companyName: z.string().nullable(),
+  status: z.string(),
+  timestamp: z.string().datetime().optional(),
+  startTimeInUTC: z
+    .string()
+    .nullable()
+    .superRefine((val, ctx) =>
+      isValidTimeFormatRefine(val, ctx, {
+        path: ["startTimeInUTC"],
+        message: "Invalid start time format must be like HH:mm",
+      }),
+    ),
+
+  endTimeInUTC: z
+    .string()
+    .nullable()
+    .superRefine((val, ctx) =>
+      isValidTimeFormatRefine(val, ctx, {
+        path: ["endTimeInUTC"],
+        message: "Invalid end time format must be like HH:mm",
+      }),
+    ),
+
+  activeDays: z.array(z.enum(["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"])),
+  timezone: z.string().nullable(),
+});
 
 export const SMTPCredentialsSchema = z.object({
   host: z.string(),
@@ -18,7 +71,7 @@ export const AddBulkSMTPRouteParamsSchema = z.object({
   batchDelay: z.number(),
   interval: z.number(),
   priority: z.string().optional(),
-  smtpCredentials: SMTPCredentialsSchema,
+  // smtpCredentials: SMTPCredentialsSchema,
   includeDelay: z.boolean(),
 });
 
@@ -29,13 +82,14 @@ export const AddSMTPRouteParamsSchema = z.object({
     name: z.string(),
   }),
   priority: z.string().optional(),
-  smtpCredentials: SMTPCredentialsSchema,
+  // smtpCredentials: SMTPCredentialsSchema,
 });
 
 // Types
 export type AddBulkSMTPRouteParamType = z.infer<typeof AddBulkSMTPRouteParamsSchema>;
 export type AddSMTPRouteParamsType = z.infer<typeof AddSMTPRouteParamsSchema>;
 export type SMTPCredentials = z.infer<typeof SMTPCredentialsSchema>;
+export type Email = z.infer<typeof EmailSchema>;
 
 export type SMTPJobOptions = {
   name: string;

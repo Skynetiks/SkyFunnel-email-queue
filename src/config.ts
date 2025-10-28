@@ -7,7 +7,7 @@ export const SENDER_IDENTITY_KEY = "SENDER_IDENTITY_SENDING_QUEUE";
 export const PAUSE_CAMPAIGN_LIST_KEY = `EMAIL_SENDING_QUEUE:pause-campaign-list`;
 
 export const QUEUE_CONFIG = {
-  concurrency: 10,
+  concurrency: 1,
   retries: 3,
 
   delayAfterPauseInSeconds: 60 * 30, // [30 mins] delay after any campaign is paused until it is rechecked. suggested to be higher to save resources.
@@ -72,3 +72,12 @@ export const ADMIN_DEFAULT_JOB_OPTIONS = {
     delay: 1000,
   },
 } satisfies JobsOptions;
+
+// ============================== IP Pool Configuration ==============================
+
+export const IP_POOL = JSON.parse(process.env.IP_POOL || "[]");
+
+export const getRandomIP = (): string => {
+  const randomIndex = Math.floor(Math.random() * IP_POOL.length);
+  return IP_POOL[randomIndex];
+};

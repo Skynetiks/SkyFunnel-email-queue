@@ -5,9 +5,9 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
+    "start": "concurrently \"npm run start:server\" \"npm run start:worker\"",
     "start:server": "tsx src/server/index.ts",
     "start:worker": "tsx src/worker/worker.ts",
-    "start:admin-worker": "tsx src/admin-worker/worker.ts",
     "dev": "nodemon",
     "lint": "eslint src",
     "build": "npm run format && npm run lint && tsc",
@@ -37,7 +37,6 @@
     "vitest": "^2.1.4"
   },
   "dependencies": {
-    "@aws-sdk/client-sesv2": "^3.859.0",
     "bullmq": "^5.25.6",
     "compression": "^1.7.5",
     "dotenv": "^16.4.5",

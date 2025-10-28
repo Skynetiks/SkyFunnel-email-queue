@@ -19,6 +19,20 @@ const emailDetailsSchema = z.object({
   subject: z.string({ message: "Subject cannot be empty" }).transform((val) => val.trim()),
   emailBody: z.string(),
   identityType: z.enum(identityTypes),
+  attachments: z
+    .array(
+      z.object({
+        filename: z.string(),
+        content: z.union([z.string(), z.instanceof(Buffer)]),
+        contentType: z.string().optional(),
+        encoding: z.string().optional(),
+        cid: z.string().optional(),
+        path: z.string().optional(),
+        href: z.string().optional(),
+      }),
+    )
+    .optional()
+    .default([]),
 });
 
 export const smtpInputSchema = z.object({

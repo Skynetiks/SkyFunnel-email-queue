@@ -1,6 +1,6 @@
 import { DateTime, Info } from "luxon";
 import dotenv from "dotenv";
-import { skyfunnelSesQueue, smtpQueue } from "../server/emails";
+import { smtpQueue } from "../server/emails";
 import { Job } from "bullmq";
 dotenv.config();
 
@@ -148,58 +148,6 @@ export function getNextActiveTime(activeDays: Days[], startTimeUTC: string): Dat
   }
 
   return now.plus({ days: daysToAdd }).set({ hour: startHour, minute: startMinute, second: 0 });
-}
-
-export async function delayAllSkyfCampaignJobsTillNextValidTime(currentJob: Job, nextActiveTime: DateTime) {
-  const queue = skyfunnelSesQueue.getQueue();
-  const jobs = await queue.getJobs(["delayed", "waiting"]);
-
-  const jobsToReschedule = jobs.filter(
-    (job) => job.data.email.emailCampaignId === currentJob.data.email.emailCampaignId,
-  );
-
-  if (jobs.length === 0) {
-    console.log("[SKYFUNNEL_WORKER] No jobs found, only rescheduling the current job.");
-  }
-  let lastScheduledTime = nextActiveTime;
-  const nextValidTimeDelay = lastScheduledTime.toMillis() - DateTime.now().toMillis();
-  const newJobId = getDelayedJobId(
-    currentJob.id || generateJobId(currentJob.data.email.emailCampaignId, currentJob.data.email.id, "SES"),
-  );
-  await queue.add(currentJob.data.email.id, currentJob.data, {
-    ...currentJob.opts,
-    delay: nextValidTimeDelay,
-    jobId: newJobId,
-  });
-  console.log(
-    `[SKYFUNNEL_WORKER] New delayed job added to queue with a delay of ${nextValidTimeDelay} ms to be sent at ${lastScheduledTime.toFormat("yyyy-MM-dd HH:mm:ss")}`,
-  );
-
-  // Sort jobs by their original intended execution time if available
-  jobs.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-
-  const delayPromises = jobsToReschedule.map(async (job) => {
-    lastScheduledTime = lastScheduledTime.plus({ milliseconds: job.data.actualInterval });
-
-    const delay = lastScheduledTime.toMillis() - DateTime.now().toMillis();
-
-    // Ensure delay is non-negative
-    if (delay < 0) {
-      console.warn(`[SKYFUNNEL_WORKER] Skipping job ${job.id}, as the delay is negative.`);
-      return Promise.resolve(); // Skip this job, but maintain structure
-    }
-
-    console.log(`[SKYFUNNEL_WORKER] Rescheduled Job ${job.id} to ${lastScheduledTime.toFormat("yyyy-MM-dd HH:mm:ss")}`);
-
-    return job.changeDelay(delay, undefined);
-  });
-
-  const results = await Promise.allSettled(delayPromises);
-
-  const failedJobs = results.filter((result) => result.status === "rejected");
-  failedJobs.forEach((result, index) => {
-    console.error(`Failed to delay job ${jobsToReschedule[index]?.id}:`, result.reason);
-  });
 }
 
 export async function delayAllSMTPCampaignJobsTillNextValidTime(currentJob: Job, nextActiveTime: DateTime) {
