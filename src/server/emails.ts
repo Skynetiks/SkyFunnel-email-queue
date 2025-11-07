@@ -5,6 +5,7 @@ import { getRedisConnection } from "../lib/redis";
 import { generateJobId, generateRandomDelay } from "../lib/utils";
 import { emailQueueManager } from "./queue";
 import { AddBulkSMTPRouteParamType, AddSMTPRouteParamsType, SMTPJobOptions } from "./types/smtpQueue";
+import { addEmailToBlacklist, logEmailEvent } from "../db/emailQueries";
 
 class BaseEmailQueue {
   protected emailQueue: Queue | undefined;
@@ -96,6 +97,68 @@ class BaseEmailQueue {
     return { successJobs: results.length - failedJobs.length, failedJobs: failedJobs.length };
   }
 
+  handleTemporaryError = async (job: Job, delayInSeconds: number) => {
+    const { email, campaignOrg } = job.data;
+    const emailAddress = email.email;
+
+    // Get current retry count from job data or attempts
+    const retryCount = job.data.retryCount || 0;
+    const maxRetries = 2;
+
+    console.log(`[SMTP_WORKER] Temporary error for email ${emailAddress}. Retry count: ${retryCount}/${maxRetries}`);
+
+    if (retryCount >= maxRetries) {
+      // Max retries exceeded - add to blacklist
+      console.error(
+        `[SMTP_WORKER] Max retries (${maxRetries}) exceeded for email ${emailAddress}. Adding to blacklist.`,
+      );
+
+      try {
+        await addEmailToBlacklist(emailAddress);
+        console.log(`[SMTP_WORKER] Email ${emailAddress} added to blacklist`);
+      } catch (blacklistError) {
+        console.error(`[SMTP_WORKER] Failed to add email ${emailAddress} to blacklist:`, blacklistError);
+      }
+      logEmailEvent(email.id, "BOUNCE", email.emailCampaignId);
+    }
+
+    // Retry - increment retry count and delay
+    console.log(`[SMTP_WORKER] Retrying email ${emailAddress} after ${delayInSeconds}s delay`);
+
+    try {
+      // Add new job with incremented retry count
+      await smtpQueue.addEmailToQueue(
+        {
+          email,
+          campaignOrg,
+          retryCount: retryCount + 1, // Increment retry count
+        },
+        "default",
+        delayInSeconds,
+      );
+
+      console.log(
+        `[SMTP_WORKER] Retry job (attempt ${retryCount + 1}/${maxRetries}) added with delay of ${delayInSeconds}s`,
+      );
+
+      // Optionally delay remaining jobs in the campaign
+      // Only do this if it's the first retry to avoid delaying multiple times
+      if (retryCount === 0) {
+        await this.delayRemainingJobs(job, delayInSeconds);
+      }
+
+      return {
+        action: "retried",
+        retryCount: retryCount + 1,
+        delayInSeconds,
+        emailAddress,
+      };
+    } catch (error) {
+      console.error("[SMTP_WORKER] Failed to add retry job to queue", error);
+      throw error;
+    }
+  };
+
   async cancelEmails(campaignId: string) {
     const emailQueue = this.emailQueue;
     const redisClient = await getRedisConnection();
@@ -172,6 +235,7 @@ class SMTPQueue extends BaseEmailQueue {
     { email, campaignOrg }: AddSMTPRouteParamsType,
     prioritySlug: string = DefaultPrioritySlug,
     delayInSeconds: number = 0,
+    retryCount: number = 0,
   ) {
     const emailQueue = this.emailQueue;
     if (!emailQueue) {
@@ -182,7 +246,7 @@ class SMTPQueue extends BaseEmailQueue {
 
     const jobId = generateJobId(email.emailCampaignId, email.id, "SMTP");
 
-    const data = { campaignOrg, email } satisfies AddSMTPRouteParamsType;
+    const data = { campaignOrg, email, retryCount } satisfies AddSMTPRouteParamsType;
 
     const jobOptions = {
       ...DEFAULT_JOB_OPTIONS,

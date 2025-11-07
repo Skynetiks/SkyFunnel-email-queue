@@ -47,7 +47,8 @@ export const getPriority = (priority: string): number => {
   return PriorityObject[priority];
 };
 
-export const ErrorCodesToRetrySMTPEmailAfterOneDay = [550, 454];
+export const permanentErorrCodesForSMTP = [550, 551, 552, 553, 554];
+export const temporaryErrorCodes = [454];
 
 // ============================== Admin Worker ==============================
 

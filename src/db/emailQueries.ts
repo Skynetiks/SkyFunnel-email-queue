@@ -127,6 +127,17 @@ export const getSuppressedEmail = async (email: string) => {
   return response.rows[0];
 };
 
+export const addEmailToBlacklist = async (email: string) => {
+  await query('INSERT INTO "BlacklistedEmail" (email) VALUES ($1, $2) ON CONFLICT (email) DO NOTHING', [email]);
+};
+
+export async function logEmailEvent(emailId: string, eventType: "BOUNCE" | "SUPPRESS", campaignId: string) {
+  await query(
+    'INSERT INTO "EmailEvent" ("id", "emailId", "eventType", "timestamp", "campaignId") VALUES (uuid_generate_v4(), $1, $2, $3, $4)',
+    [emailId, eventType, new Date().toISOString(), campaignId],
+  );
+}
+
 export enum CACHE_CLEAR_TYPE {
   SUBSCRIPTION = "SUBSCRIPTION",
   CAMPAIGN = "CAMPAIGN",

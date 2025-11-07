@@ -83,6 +83,7 @@ export const AddSMTPRouteParamsSchema = z.object({
   }),
   priority: z.string().optional(),
   // smtpCredentials: SMTPCredentialsSchema,
+  retryCount: z.number().optional().nullable(),
 });
 
 // Types

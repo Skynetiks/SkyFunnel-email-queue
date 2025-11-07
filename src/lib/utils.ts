@@ -153,50 +153,57 @@ export function getNextActiveTime(activeDays: Days[], startTimeUTC: string): Dat
 export async function delayAllSMTPCampaignJobsTillNextValidTime(currentJob: Job, nextActiveTime: DateTime) {
   const queue = smtpQueue.getQueue();
   const jobs = await queue.getJobs(["delayed", "waiting"]);
-
   const jobsToReschedule = jobs.filter(
     (job) => job.data.email.emailCampaignId === currentJob.data.email.emailCampaignId,
   );
 
-  if (jobs.length === 0) {
-    console.log("[SMTP_WORKER] No jobs found, only rescheduling the current job.");
+  if (jobsToReschedule.length === 0) {
+    console.log("[SMTP_WORKER] No jobs found to reschedule.");
+    return;
   }
+
+  // Remove all old jobs first
+  await Promise.all(jobsToReschedule.map((job) => job.remove()));
+  console.log(`[SMTP_WORKER] Removed ${jobsToReschedule.length} old jobs`);
+
+  // Re-add jobs with correct delays
   let lastScheduledTime = nextActiveTime;
-  const nextValidTimeDelay = lastScheduledTime.toMillis() - DateTime.now().toMillis();
-  const newJobId = getDelayedJobId(
-    currentJob.id || generateJobId(currentJob.data.email.emailCampaignId, currentJob.data.email.id, "SES"),
-  );
-  await queue.add(currentJob.data.email.id, currentJob.data, {
-    ...currentJob.opts,
-    delay: nextValidTimeDelay,
-    jobId: newJobId,
-  });
-  console.log(
-    `[SMTP_WORKER] New delayed job added to queue with a delay of ${nextValidTimeDelay} ms to be sent at ${lastScheduledTime.toFormat("yyyy-MM-dd HH:mm:ss")}`,
-  );
 
-  // Sort jobs by their original intended execution time if available
-  jobs.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const newJobs: Array<{ name: string; data: any; opts: any }> = [];
 
-  const delayPromises = jobsToReschedule.map(async (job) => {
-    lastScheduledTime = lastScheduledTime.plus({ milliseconds: job.data.actualInterval });
-
+  for (const job of jobsToReschedule) {
     const delay = lastScheduledTime.toMillis() - DateTime.now().toMillis();
 
-    // Ensure delay is non-negative
     if (delay < 0) {
-      console.warn(`[SMTP_WORKER] Skipping job ${job.id}, as the delay is negative.`);
-      return Promise.resolve(); // Skip this job, but maintain structure
+      console.warn(`[SMTP_WORKER] Skipping job ${job.id}, negative delay`);
+      continue;
     }
-    console.log(`[SMTP_WORKER] Rescheduled Job ${job.id} to ${lastScheduledTime.toFormat("yyyy-MM-dd HH:mm:ss")}`);
 
-    return job.changeDelay(delay, undefined);
-  });
+    newJobs.push({
+      name: job.data.email.id,
+      data: job.data,
+      opts: {
+        priority: job.opts.priority,
+        removeOnFail: job.opts.removeOnFail,
+        removeOnComplete: job.opts.removeOnComplete,
+        backoff: job.opts.backoff,
+        attempts: job.opts.attempts,
+        delay: delay,
+        jobId: generateJobId(job.data.email.emailCampaignId, job.data.email.id, "SMTP"),
+      },
+    });
 
-  const results = await Promise.allSettled(delayPromises);
+    lastScheduledTime = lastScheduledTime.plus({ milliseconds: job.data.actualInterval });
 
-  const failedJobs = results.filter((result) => result.status === "rejected");
-  failedJobs.forEach((result, index) => {
-    console.error(`Failed to delay job ${jobsToReschedule[index]?.id}:`, result.reason);
-  });
+    console.log(
+      `[SMTP_WORKER] Will reschedule job ${job.id} to ${lastScheduledTime.toFormat("yyyy-MM-dd HH:mm:ss")} with delay ${delay}ms`,
+    );
+  }
+
+  if (newJobs.length > 0) {
+    // Add all jobs in bulk
+    await queue.addBulk(newJobs);
+    console.log(`[SMTP_WORKER] Re-added ${newJobs.length} jobs successfully`);
+  }
 }

@@ -7,10 +7,11 @@ import { convertHtmlToText } from "./utils";
 import { Debug } from "./debug";
 import { AddSMTPRouteParamsType, SMTPCredentials } from "../server/types/smtpQueue";
 import { decryptToken } from "./decrypt";
-import { ErrorCodesToRetrySMTPEmailAfterOneDay, getRandomIP } from "../config";
+import { temporaryErrorCodes, getRandomIP, permanentErorrCodesForSMTP } from "../config";
 import { Job } from "bullmq";
 import { smtpQueue } from "../server/emails";
 import { AppError } from "./errorHandler";
+import { addEmailToBlacklist, logEmailEvent } from "../db/emailQueries";
 
 export async function sendEmailSMTPAdmin(
   senderEmail: string,
@@ -319,8 +320,14 @@ export async function smtpErrorHandler(error: unknown, job: Job<AddSMTPRoutePara
   if (!(error instanceof Error && "responseCode" in error && typeof error.responseCode === "number")) throw error;
 
   const responseCode = error.responseCode;
-  if (ErrorCodesToRetrySMTPEmailAfterOneDay.includes(responseCode)) {
-    Debug.log("Error code " + responseCode + " detected. Delaying email sending for 1 day......");
+  if (permanentErorrCodesForSMTP.includes(responseCode)) {
+    Debug.log("Permanent error code " + responseCode + " detected. Marking email as failed.");
+    addEmailToBlacklist(job.data.email.email);
+    logEmailEvent(job.data.email.id, "BOUNCE", job.data.email.emailCampaignId);
+    return;
+  }
+  if (temporaryErrorCodes.includes(responseCode)) {
+    Debug.log("Error code " + responseCode + " detected. Handling temporary error.");
     if (!job.data.campaignOrg.id) {
       throw new AppError("INTERNAL_SERVER_ERROR", "Campaign organization id not found", false, "HIGH");
     }
