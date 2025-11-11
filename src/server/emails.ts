@@ -104,24 +104,24 @@ class BaseEmailQueue {
    */
   async delayRemainingJobsForSender(currentJob: Job, delayInSeconds: number) {
     const campaignId = currentJob.data.email.emailCampaignId;
-    const senderId = currentJob.data.email.senderId;
+    const senderEmail = currentJob.data.email.senderEmail;
 
-    if (!senderId) {
-      console.error("[SMTP_WORKER] No senderId found in job data");
+    if (!senderEmail) {
+      console.error("[SMTP_WORKER] No sender email found in job data");
       return { successJobs: 0, failedJobs: 0 };
     }
 
     const jobs = await this.getJobsByJobIdKeyword(campaignId, ["delayed", "paused", "waiting"]);
 
     // Filter jobs by sender
-    const senderJobs = jobs.filter((job) => job.data?.email?.senderId === senderId);
+    const senderJobs = jobs.filter((job) => job.data?.email?.senderEmail === senderEmail);
 
     if (!senderJobs.length) {
-      console.log(`No jobs found for campaignId: ${campaignId} and senderId: ${senderId}`);
+      console.log(`No jobs found for campaignId: ${campaignId} and senderEmail: ${senderEmail}`);
       return { successJobs: 0, failedJobs: 0 };
     }
 
-    console.log(`Found ${senderJobs.length} jobs for sender ${senderId} out of ${jobs.length} total campaign jobs`);
+    console.log(`Found ${senderJobs.length} jobs for sender ${senderEmail} out of ${jobs.length} total campaign jobs`);
     console.time("Delay remaining jobs");
 
     const delayedTimestamp = new Date(Date.now() + delayInSeconds * 1000).getTime();
@@ -148,7 +148,7 @@ class BaseEmailQueue {
     try {
       await smtpQueue.addEmailToQueue({ email, campaignOrg }, "default", delayInSeconds);
       console.log(
-        `[SMTP_WORKER] New delayed job added to queue for sender ${senderId} with a delay of ${delayInSeconds * 1000} ms`,
+        `[SMTP_WORKER] New delayed job added to queue for sender ${senderEmail} with a delay of ${delayInSeconds * 1000} ms`,
       );
     } catch (moveError) {
       console.error("[SMTP_WORKER] Failed to add job to queue", moveError);
