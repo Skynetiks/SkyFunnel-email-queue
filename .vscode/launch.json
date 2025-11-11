@@ -13,5 +13,17 @@
 			"request": "launch",
 			"command": "npx tsx src/server/index.ts"
 		},
+		{
+			"name": "least delay",
+			"type": "node-terminal",
+			"request": "launch",
+			"command": "node findLeastDelayJob.js"
+		},
+		{
+			"name": "fix jobs",
+			"type": "node-terminal",
+			"request": "launch",
+			"command": "npx tsx fixStuckJobs.ts"
+		}
 	]
 }

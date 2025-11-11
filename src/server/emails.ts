@@ -96,6 +96,69 @@ class BaseEmailQueue {
     return { successJobs: results.length - failedJobs.length, failedJobs: failedJobs.length };
   }
 
+  /**
+   * Delays remaining jobs for a specific sender and creates a new job with delay for the current job
+   * @param currentJob - The current job being processed
+   * @param delayInSeconds - Delay duration in seconds
+   * @returns Object with counts of successful and failed job delays
+   */
+  async delayRemainingJobsForSender(currentJob: Job, delayInSeconds: number) {
+    const campaignId = currentJob.data.email.emailCampaignId;
+    const senderId = currentJob.data.email.senderId;
+
+    if (!senderId) {
+      console.error("[SMTP_WORKER] No senderId found in job data");
+      return { successJobs: 0, failedJobs: 0 };
+    }
+
+    const jobs = await this.getJobsByJobIdKeyword(campaignId, ["delayed", "paused", "waiting"]);
+
+    // Filter jobs by sender
+    const senderJobs = jobs.filter((job) => job.data?.email?.senderId === senderId);
+
+    if (!senderJobs.length) {
+      console.log(`No jobs found for campaignId: ${campaignId} and senderId: ${senderId}`);
+      return { successJobs: 0, failedJobs: 0 };
+    }
+
+    console.log(`Found ${senderJobs.length} jobs for sender ${senderId} out of ${jobs.length} total campaign jobs`);
+    console.time("Delay remaining jobs");
+
+    const delayedTimestamp = new Date(Date.now() + delayInSeconds * 1000).getTime();
+    const jobsDelayPromise = senderJobs.map(async (job) => {
+      const state = await job.getState();
+      if (["waiting", "paused"].includes(state)) return;
+
+      if (state === "delayed") {
+        await job.changeDelay(delayInSeconds * 1000);
+      } else {
+        await job.moveToDelayed(delayedTimestamp, undefined);
+      }
+    });
+
+    const results = await Promise.allSettled(jobsDelayPromise);
+
+    const failedJobs = results.filter((result) => result.status === "rejected");
+    failedJobs.forEach((result, index) => {
+      console.error(`Failed to delay job ${senderJobs[index]?.id}:`, result.reason);
+    });
+
+    // Add new job with the current job's data and delay
+    const { email, campaignOrg } = currentJob.data;
+    try {
+      await smtpQueue.addEmailToQueue({ email, campaignOrg }, "default", delayInSeconds);
+      console.log(
+        `[SMTP_WORKER] New delayed job added to queue for sender ${senderId} with a delay of ${delayInSeconds * 1000} ms`,
+      );
+    } catch (moveError) {
+      console.error("[SMTP_WORKER] Failed to add job to queue", moveError);
+    }
+
+    console.timeEnd("Delay remaining jobs");
+
+    return { successJobs: results.length - failedJobs.length, failedJobs: failedJobs.length };
+  }
+
   async cancelEmails(campaignId: string) {
     const emailQueue = this.emailQueue;
     const redisClient = await getRedisConnection();

@@ -326,7 +326,7 @@ export async function smtpErrorHandler(error: unknown, job: Job<AddSMTPRoutePara
     }
 
     const ONE_DAY_IN_SECONDS = 86400;
-    await smtpQueue.delayRemainingJobs(job, ONE_DAY_IN_SECONDS);
+    await smtpQueue.delayRemainingJobsForSender(job, ONE_DAY_IN_SECONDS);
     return;
   }
 
