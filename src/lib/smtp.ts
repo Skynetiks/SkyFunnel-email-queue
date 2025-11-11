@@ -325,8 +325,8 @@ export async function smtpErrorHandler(error: unknown, job: Job<AddSMTPRoutePara
       throw new AppError("INTERNAL_SERVER_ERROR", "Campaign organization id not found", false, "HIGH");
     }
 
-    const ONE_DAY_IN_SECONDS = 86400;
-    await smtpQueue.delayRemainingJobsForSender(job, ONE_DAY_IN_SECONDS);
+    const EIGHT_HOURS_IN_SECONDS = 28800;
+    await smtpQueue.delayRemainingJobsForSender(job, EIGHT_HOURS_IN_SECONDS);
     return;
   }
 

@@ -73,11 +73,12 @@ async function sendEmailAndUpdateStatus(
 
   const [campaign, organizationSubscription] = await Promise.all([campaignPromise, organizationSubscriptionPromise]);
 
-  console.log({
-    email,
-    organizationSubscription,
-    campaign,
-  });
+  // console.log({
+  //   email,
+  //   organizationSubscription,
+  //   campaign,
+  // });
+  console.log("[SMTP_WORKER] Sender Email:", email.senderEmail);
 
   if (!campaign) throw new AppError("NOT_FOUND", "Campaign not found");
   if (!organizationSubscription) throw new AppError("NOT_FOUND", "Organization Subscription not found");

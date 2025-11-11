@@ -8,7 +8,7 @@ export const PAUSE_CAMPAIGN_LIST_KEY = `EMAIL_SENDING_QUEUE:pause-campaign-list`
 
 export const QUEUE_CONFIG = {
   concurrency: 1,
-  retries: 3,
+  retries: 4,
 
   delayAfterPauseInSeconds: 60 * 30, // [30 mins] delay after any campaign is paused until it is rechecked. suggested to be higher to save resources.
 };
