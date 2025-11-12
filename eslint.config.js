@@ -4,15 +4,41 @@ import tseslint from "typescript-eslint";
 
 /** @type {import('eslint').Linter.Config[]} */
 export default [
-  { files: ["src/**/*.{js,mjs,cjs,ts}"] },
+  // Configuration for src files with type-aware linting
   {
-    languageOptions: { globals: globals.browser },
+    files: ["src/**/*.{js,mjs,cjs,ts}"],
+    languageOptions: {
+      globals: globals.node,
+      parserOptions: {
+        project: "./tsconfig.json",
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
     rules: {
       eqeqeq: "error", // Enforce strict equality
       "no-var": "warn", // Disallow using var
       "no-unused-vars": ["warn", { argsIgnorePattern: "^_" }], // Disallow unused variables
+      "@typescript-eslint/no-floating-promises": "error", // Require promises to be awaited or handled
+      "@typescript-eslint/no-misused-promises": "error", // Prevent common mistakes with promises
+      "@typescript-eslint/require-await": "warn", // Warn if async function doesn't use await
     },
-    ignores: ["node_modules/**/*", "dist/**/*"], // Ignore node_modules and dist directories
+  },
+
+  // Configuration for root-level script files without type-aware linting
+  {
+    files: ["*.ts", "*.js"],
+    languageOptions: {
+      globals: globals.node,
+    },
+    rules: {
+      eqeqeq: "error",
+      "no-var": "warn",
+      "no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
+    },
+  },
+
+  {
+    ignores: ["node_modules/**/*", "dist/**/*", "*.config.js"], // Ignore node_modules, dist, and config files
   },
 
   pluginJs.configs.recommended,

@@ -90,7 +90,7 @@ async function sendEmailAndUpdateStatus(
       `Organization ${organizationId} has reached its limit of ${orgUsage}/${organizationSubscription.allowedEmails} emails`,
     );
 
-    Promise.all([
+    await Promise.all([
       query('UPDATE "EmailCampaign" SET "status" = $1 WHERE id = $2', ["LIMIT", email.emailCampaignId]),
       query('UPDATE "Email" SET status = $1 WHERE id = $2', ["LIMIT", email.id]),
     ]);
@@ -201,7 +201,7 @@ async function sendEmailAndUpdateStatus(
       throw new AppError("INTERNAL_SERVER_ERROR", "Email not sent by SMTP");
     }
   } catch (error) {
-    smtpErrorHandler(error, job);
+    await smtpErrorHandler(error, job);
   }
 }
 
@@ -216,15 +216,19 @@ const worker = new Worker(SMTP_EMAIL_QUEUE_KEY, (job) => handleJob(job), {
   lockRenewTime: 15000,
 });
 
-worker.on("failed", async (job) => {
-  if (job && "id" in job.data.email) {
-    console.log("Updating email status to ERROR");
-    await query('UPDATE "Email" SET status = $1 WHERE id = $2', ["ERROR", job.data.email.id]);
-  } else {
-    Debug.devLog("Failed to update email status to ERROR as there was not email id in the job data", job);
-  }
+worker.on("failed", (job) => {
+  void (async () => {
+    if (job && "id" in job.data.email) {
+      console.log("Updating email status to ERROR");
+      await query('UPDATE "Email" SET status = $1 WHERE id = $2', ["ERROR", job.data.email.id]);
+    } else {
+      Debug.devLog("Failed to update email status to ERROR as there was not email id in the job data", job);
+    }
 
-  console.error("[SMTP_WORKER] Job failed");
+    console.error("[SMTP_WORKER] Job failed");
+  })().catch((err) => {
+    console.error("[SMTP_WORKER] Error in failed handler:", err);
+  });
 });
 
 worker.on("completed", () => {
@@ -249,9 +253,19 @@ const gracefulShutdown = async (signal: string) => {
   process.exit(0);
 };
 
-process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+process.on("SIGINT", () => {
+  void gracefulShutdown("SIGINT").catch((err) => {
+    console.error("Error during SIGINT shutdown:", err);
+    process.exit(1);
+  });
+});
 
-process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGTERM", () => {
+  void gracefulShutdown("SIGTERM").catch((err) => {
+    console.error("Error during SIGTERM shutdown:", err);
+    process.exit(1);
+  });
+});
 process.on("uncaughtException", function (err) {
   Debug.error(err, "Uncaught exception");
 });

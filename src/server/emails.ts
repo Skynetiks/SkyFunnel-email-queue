@@ -20,7 +20,7 @@ class BaseEmailQueue {
     return counts;
   }
 
-  async getJobsByJobIdKeyword(keyword: string, types: JobType[] = ["delayed", "paused", "waiting"], chunkSize = 100) {
+  async getJobsByJobIdKeyword(keyword: string, types: JobType[] = ["delayed", "waiting"], chunkSize = 100) {
     let finalJobs: Job[] = [];
     let start = 0;
 
@@ -55,7 +55,7 @@ class BaseEmailQueue {
    */
   async delayRemainingJobs(currentJob: Job, delayInSeconds: number) {
     const campaignId = currentJob.data.email.emailCampaignId;
-    const jobs = await this.getJobsByJobIdKeyword(campaignId, ["delayed", "paused", "waiting"]);
+    const jobs = await this.getJobsByJobIdKeyword(campaignId, ["delayed", "waiting"]);
     if (!jobs.length) {
       console.log(`No jobs found for campaignId: ${campaignId}`);
       return 0;
@@ -66,12 +66,11 @@ class BaseEmailQueue {
     const delayedTimestamp = new Date(Date.now() + delayInSeconds * 1000).getTime();
     const jobsDelayPromise = jobs.map(async (job) => {
       const state = await job.getState();
-      if (["waiting", "paused"].includes(state)) return;
 
       if (state === "delayed") {
-        job.changeDelay(delayInSeconds * 1000);
-      } else {
-        job.moveToDelayed(delayedTimestamp, undefined);
+        await job.changeDelay(delayInSeconds * 1000);
+      } else if (state === "waiting") {
+        await job.moveToDelayed(delayedTimestamp, undefined);
       }
     });
 
@@ -111,27 +110,37 @@ class BaseEmailQueue {
       return { successJobs: 0, failedJobs: 0 };
     }
 
-    const jobs = await this.getJobsByJobIdKeyword(campaignId, ["delayed", "paused", "waiting"]);
+    // Add new job with the current job's data and delay (do this first to ensure failed job is rescheduled)
+    const { email, campaignOrg } = currentJob.data;
+    try {
+      await smtpQueue.addEmailToQueue({ email, campaignOrg }, "default", delayInSeconds);
+      console.log(
+        `[SMTP_WORKER] Current job re-added to queue for sender ${senderEmail} with a delay of ${delayInSeconds} seconds`,
+      );
+    } catch (moveError) {
+      console.error("[SMTP_WORKER] Failed to add current job to queue", moveError);
+    }
+
+    const jobs = await this.getJobsByJobIdKeyword(campaignId, ["delayed", "waiting"]);
 
     // Filter jobs by sender
     const senderJobs = jobs.filter((job) => job.data?.email?.senderEmail === senderEmail);
 
     if (!senderJobs.length) {
-      console.log(`No jobs found for campaignId: ${campaignId} and senderEmail: ${senderEmail}`);
+      console.log(`No other jobs found for campaignId: ${campaignId} and senderEmail: ${senderEmail}`);
       return { successJobs: 0, failedJobs: 0 };
     }
 
-    console.log(`Found ${senderJobs.length} jobs for sender ${senderEmail} out of ${jobs.length} total campaign jobs`);
+    console.log(`Found ${senderJobs.length} other jobs for sender ${senderEmail} out of ${jobs.length} total campaign jobs`);
     console.time("Delay remaining jobs");
 
     const delayedTimestamp = new Date(Date.now() + delayInSeconds * 1000).getTime();
     const jobsDelayPromise = senderJobs.map(async (job) => {
       const state = await job.getState();
-      if (["waiting", "paused"].includes(state)) return;
 
       if (state === "delayed") {
         await job.changeDelay(delayInSeconds * 1000);
-      } else {
+      } else if (state === "waiting") {
         await job.moveToDelayed(delayedTimestamp, undefined);
       }
     });
@@ -142,17 +151,6 @@ class BaseEmailQueue {
     failedJobs.forEach((result, index) => {
       console.error(`Failed to delay job ${senderJobs[index]?.id}:`, result.reason);
     });
-
-    // Add new job with the current job's data and delay
-    const { email, campaignOrg } = currentJob.data;
-    try {
-      await smtpQueue.addEmailToQueue({ email, campaignOrg }, "default", delayInSeconds);
-      console.log(
-        `[SMTP_WORKER] New delayed job added to queue for sender ${senderEmail} with a delay of ${delayInSeconds * 1000} ms`,
-      );
-    } catch (moveError) {
-      console.error("[SMTP_WORKER] Failed to add job to queue", moveError);
-    }
 
     console.timeEnd("Delay remaining jobs");
 
@@ -175,7 +173,7 @@ class BaseEmailQueue {
     const jobsToCancel = jobs.filter((job) => job.id?.includes(campaignId));
 
     const jobsCancelPromises = jobsToCancel.map(async (job) => {
-      job.remove();
+      await job.remove();
     });
 
     const results = await Promise.allSettled(jobsCancelPromises);

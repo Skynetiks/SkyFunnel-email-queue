@@ -24,6 +24,12 @@
 			"type": "node-terminal",
 			"request": "launch",
 			"command": "npx tsx fixStuckJobs.ts"
+		},
+		{
+			"name": "Readd QueuedEmails",
+			"type": "node-terminal",
+			"request": "launch",
+			"command": "npx tsx readdQueuedEmails.ts"
 		}
 	]
 }

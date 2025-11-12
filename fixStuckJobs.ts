@@ -1,7 +1,10 @@
 import Redis from "ioredis";
 import { Queue } from "bullmq";
+import dotenv from "dotenv";
 
-const REDIS_URL = "redis://:RboMlTyHfoSFcu0SkQcse6aNXeahp0AKjAzCaF5FFPg@147.182.214.155:6379";
+dotenv.config();
+
+const REDIS_URL = process.env.REDIS_URL || "";
 const SMTP_EMAIL_QUEUE_KEY = "SMTP_EMAIL_SENDING_QUEUE";
 
 const redis = new Redis(REDIS_URL);
@@ -41,7 +44,7 @@ async function fixStuckJobs() {
   console.log("🔍 Scanning for stuck jobs...\n");
 
   // BullMQ uses a different key pattern
-  const pattern = `bull:${SMTP_EMAIL_QUEUE_KEY}:*`;
+  const pattern = `*cmhsn6l2n0001lkk4vhf79mgw*`;
   const keys = await redis.keys(pattern);
 
   // Filter only job keys (not meta keys)

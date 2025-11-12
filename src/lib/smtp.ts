@@ -320,7 +320,7 @@ export async function smtpErrorHandler(error: unknown, job: Job<AddSMTPRoutePara
 
   const responseCode = error.responseCode;
   if (ErrorCodesToRetrySMTPEmailAfterOneDay.includes(responseCode)) {
-    Debug.log("Error code " + responseCode + " detected. Delaying email sending for 1 day......");
+    Debug.log("Error code " + responseCode + " detected. Delaying email sending for 8 hours......");
     if (!job.data.campaignOrg.id) {
       throw new AppError("INTERNAL_SERVER_ERROR", "Campaign organization id not found", false, "HIGH");
     }

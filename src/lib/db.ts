@@ -89,11 +89,15 @@ export const query = async (text: string, params: (string | number)[]) => {
 
 export default pool;
 
-process.on("SIGINT", async () => {
-  if (pool && pool.ended === false) {
-    Debug.log("Closing database pool...");
-    await pool.end();
-    Debug.log("Database pool closed");
-  }
+process.on("SIGINT", () => {
+  void (async () => {
+    if (pool && pool.ended === false) {
+      Debug.log("Closing database pool...");
+      await pool.end();
+      Debug.log("Database pool closed");
+    }
+  })().catch((err) => {
+    console.error("Error closing database pool:", err);
+  });
   process.exit(0);
 });
