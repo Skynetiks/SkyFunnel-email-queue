@@ -114,11 +114,16 @@ export function isActiveDay(activeDays: Days[], timezone: string = "UTC"): boole
 }
 
 export const generateRandomDelay = (currentInterval: number) => {
-  // generates a random delay between 20 to 90 seconds and adds it to the current interval. (ms)
+  // Generates a random delay varying ±30% around the interval to appear more human
+  // Example: 60s interval → 42-78s delay (in milliseconds)
+  // This keeps average send rate constant while adding natural variation
 
-  const randomDelay = Math.floor(Math.random() * (90 - 20 + 1)) + 20;
-  const newRandomDelay = currentInterval * 1000 + randomDelay * 1000;
-  return newRandomDelay;
+  const variationPercent = 0.3; // ±30% variation
+  const minDelay = currentInterval * (1 - variationPercent);
+  const maxDelay = currentInterval * (1 + variationPercent);
+  const randomDelay = Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
+
+  return randomDelay * 1000; // convert to milliseconds
 };
 
 export function getNextActiveTime(activeDays: Days[], startTimeUTC: string): DateTime {
