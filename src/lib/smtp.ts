@@ -11,6 +11,7 @@ import { ErrorCodesToRetrySMTPEmailAfterOneDay, getRandomIP } from "../config";
 import { Job } from "bullmq";
 import { smtpQueue } from "../server/emails";
 import { AppError } from "./errorHandler";
+import { DelayedSendersManager } from "./delayedSenders";
 
 export async function sendEmailSMTPAdmin(
   senderEmail: string,
@@ -326,6 +327,13 @@ export async function smtpErrorHandler(error: unknown, job: Job<AddSMTPRoutePara
     }
 
     const EIGHT_HOURS_IN_SECONDS = 28800;
+    const senderEmail = job.data.email.senderEmail;
+
+    // Mark sender as delayed in Redis to prevent other jobs from being picked up
+    if (senderEmail) {
+      await DelayedSendersManager.markSenderAsDelayed(senderEmail, EIGHT_HOURS_IN_SECONDS);
+    }
+
     await smtpQueue.delayRemainingJobsForSender(job, EIGHT_HOURS_IN_SECONDS);
     return;
   }

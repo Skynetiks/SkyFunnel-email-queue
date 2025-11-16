@@ -21,6 +21,8 @@ import { AddSMTPRouteParamsSchema, AddSMTPRouteParamsType, Email } from "../serv
 import { sendSMTPEmail, smtpErrorHandler } from "../lib/smtp";
 import { usageRedisStore } from "../lib/usageRedisStore";
 import { UnsubscribeTokenPayload } from "../lib/token";
+import { DelayedSendersManager } from "../lib/delayedSenders";
+import { smtpQueue } from "../server/emails";
 
 const handleJob = async (job: Job) => {
   console.log("[SMTP_WORKER] Job Started with jobID", job.id);
@@ -33,6 +35,20 @@ const handleJob = async (job: Job) => {
     }
 
     const { email, campaignOrg } = validatedData.data;
+
+    // Check if sender is currently delayed due to previous 550 error
+    if (email.senderEmail) {
+      const delayStatus = await DelayedSendersManager.isSenderDelayed(email.senderEmail);
+      if (delayStatus.isDelayed && delayStatus.remainingDelaySeconds) {
+        console.log(
+          `[SMTP_WORKER] Sender ${email.senderEmail} is delayed. Re-adding job with ${delayStatus.remainingDelaySeconds}s delay`,
+        );
+        // Re-add this job with the remaining delay
+        await smtpQueue.addEmailToQueue({ email, campaignOrg }, "default", delayStatus.remainingDelaySeconds);
+        return;
+      }
+    }
+
     const { startTimeInUTC, endTimeInUTC, activeDays, timezone } = email;
 
     const isWithinPeriodValue = isWithinPeriod(startTimeInUTC, endTimeInUTC);
