@@ -18,6 +18,7 @@ const emailDetailsSchema = z.object({
     .transform((val) => val?.toLowerCase()),
   subject: z.string({ message: "Subject cannot be empty" }).transform((val) => val.trim()),
   emailBody: z.string(),
+  inReplyTo: z.string().optional(),
   identityType: z.enum(identityTypes),
   attachments: z
     .array(

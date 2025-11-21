@@ -255,13 +255,14 @@ type Email = {
   subject: string;
   body: string;
   replyToEmail?: string;
+  inReplyTo?: string;
   campaignId?: string;
   unsubscribeUrl?: string;
   attachments?: Attachment[];
 };
 
 export async function sendSMTPEmail(email: Email, smtpCredentials: SMTPCredentials, specificIP?: string) {
-  const { body, senderEmail, senderName, recipient, subject, replyToEmail, campaignId, attachments } = email;
+  const { body, senderEmail, senderName, recipient, subject, replyToEmail, campaignId, attachments, inReplyTo } = email;
   const plainTextBody = convertHtmlToText(body);
   const campaignIdHtml = campaignId ? `<p style='display:none'>thread::${campaignId}</p>` : "";
   const plainTextBodyWithCampaignId = campaignId ? `${plainTextBody} thread::${campaignId}` : plainTextBody;
@@ -277,6 +278,7 @@ export async function sendSMTPEmail(email: Email, smtpCredentials: SMTPCredentia
     html: html,
     replyTo: replyToEmail || senderEmail,
     headers: {
+      ...(inReplyTo && { "In-Reply-To": inReplyTo }),
       ...(email.unsubscribeUrl && {
         "List-Unsubscribe": `<${email.unsubscribeUrl}>`,
         "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
