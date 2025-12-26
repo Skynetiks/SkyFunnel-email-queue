@@ -108,7 +108,7 @@ class NodemailerTransporter {
   private static instance: NodemailerTransporter | null = null;
   private cleanupInterval: NodeJS.Timeout | null;
 
-  private static cleanUpAfterMs = 5 * 60 * 1000; // 5 minutes
+  private static cleanUpAfterMs = 30 * 60 * 1000; // 30 minutes instead of 5
   private static cleanUpCheckIntervalMs = 60 * 1000; // 1 minute
 
   constructor() {
@@ -120,6 +120,10 @@ class NodemailerTransporter {
   static getInstance(): NodemailerTransporter {
     if (!this.instance) {
       this.instance = new NodemailerTransporter();
+    }
+    // Ensure cleanup is running (defensive programming)
+    if (!this.instance.cleanupInterval) {
+      this.instance.startCleanup();
     }
     return this.instance;
   }
@@ -198,6 +202,11 @@ class NodemailerTransporter {
   }
 
   private startCleanup() {
+    // Prevent multiple intervals
+    if (this.cleanupInterval) {
+      return;
+    }
+
     this.cleanupInterval = setInterval(() => {
       for (const [key, { transporter, lastUsed }] of this.transporters.entries()) {
         try {
@@ -211,6 +220,9 @@ class NodemailerTransporter {
         }
       }
     }, NodemailerTransporter.cleanUpCheckIntervalMs);
+
+    // Prevent the interval from keeping the process alive
+    this.cleanupInterval.unref();
   }
 
   async shutdown() {
@@ -240,12 +252,8 @@ async function sendNodemailerEmailRaw({ host, port, secure, user, pass, localAdd
     throw new AppError("INTERNAL_SERVER_ERROR", "Failed to create transporter");
   }
 
-  try {
-    const info = await transporter.sendMail(options);
-    return info as SMTPTransport.SentMessageInfo;
-  } finally {
-    instance?.closeTransporter({ host, user, localAddress });
-  }
+  const info = await transporter.sendMail(options);
+  return info as SMTPTransport.SentMessageInfo;
 }
 
 type Email = {
